@@ -5,7 +5,8 @@ import Onboarding from './screens/Onboarding.jsx'
 import Home from './screens/Home.jsx'
 import KidSetup from './screens/KidSetup.jsx'
 import InstallGuide from './screens/InstallGuide.jsx'
-import { choseSafari, needsInstallFirst } from './lib/platform.js'
+import OpenInBrowser from './screens/OpenInBrowser.jsx'
+import { choseSafari, isInAppBrowser, needsInstallFirst } from './lib/platform.js'
 
 // signed out -> SignIn; signed in without a To Do Dash profile -> Onboarding
 // (email accounts) or KidSetup (kid devices, which hold an anonymous session);
@@ -48,6 +49,7 @@ export default function App() {
   }
   if (session === undefined) return <Shell><p className="muted">Loading…</p></Shell>
   if (!session) {
+    if (isInAppBrowser()) return <Shell><OpenInBrowser /></Shell>
     if (needsInstallFirst() && !inSafari) {
       return <Shell><InstallGuide onContinueInSafari={() => setInSafari(true)} /></Shell>
     }

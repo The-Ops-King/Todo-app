@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { chooseSafari } from '../lib/platform.js'
+import { chooseSafari, isIOSChrome } from '../lib/platform.js'
 import { inviteLink, pendingInvite } from '../lib/invite.js'
 
 // Shown in Safari on iPhone and iPad before anyone signs in. Safari and the
@@ -30,7 +30,9 @@ export default function InstallGuide({ onContinueInSafari }) {
           </li>
         )}
         <li>
-          <span>Tap Share <ShareIcon />. Don't see it? Tap <strong>···</strong> first.</span>
+          {isIOSChrome()
+            ? <span>Tap Share <ShareIcon /> at the top right of Chrome.</span>
+            : <span>Tap Share <ShareIcon />. Don't see it? Tap <strong>···</strong> first.</span>}
         </li>
         <li>
           <span>Scroll down and tap <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</span>
@@ -41,7 +43,7 @@ export default function InstallGuide({ onContinueInSafari }) {
       </ol>
       <p className="muted small">Setting up a kid's phone? Do the same steps on their phone, then open the app from their Home Screen.</p>
       <button type="button" className="link" onClick={() => { chooseSafari(); onContinueInSafari() }}>
-        I'm an adult and want to use it in Safari instead
+        I'm an adult and want to use it in the browser instead
       </button>
     </div>
   )

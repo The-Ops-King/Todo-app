@@ -74,3 +74,33 @@ export function choseSafari() {
     return false
   }
 }
+
+// Browsers built into other apps (Instagram, Facebook, Gmail's Google app,
+// TikTok, Android WebViews) cannot add a site to the Home Screen or keep a
+// reliable sign-in, so the app asks to be reopened in a real browser.
+// Detection is by user agent. Apps that hide behind a plain Safari user agent
+// cannot be detected, and that is acceptable: they are rare.
+const IN_APP = /FBAN|FBAV|FB_IAB|FBIOS|Instagram|GSA\/|LinkedInApp|Snapchat|musical_ly|BytedanceWebview|TikTok|Pinterest|Twitter|Line\/|KAKAOTALK|MicroMessenger|; wv\)/
+
+export function isInAppBrowser() {
+  return IN_APP.test(navigator.userAgent)
+}
+
+export function isAndroid() {
+  return /Android/.test(navigator.userAgent)
+}
+
+export function isIOSChrome() {
+  return /CriOS/.test(navigator.userAgent)
+}
+
+// Links that hand the current page to a real browser. x-safari-https and
+// googlechromes are iOS schemes; the intent URL is Android's way to open Chrome.
+export function openInBrowserLinks(url) {
+  const u = new URL(url)
+  const rest = u.host + u.pathname + u.search
+  if (isAndroid()) {
+    return { chrome: `intent://${rest}#Intent;scheme=https;package=com.android.chrome;end` }
+  }
+  return { safari: `x-safari-https://${rest}`, chrome: `googlechromes://${rest}` }
+}
