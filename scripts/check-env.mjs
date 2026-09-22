@@ -1,20 +1,28 @@
-// Prints which integration variables this build can see. Names only, never
-// values. Vercel's project env API does not list linked shared variables, so
-// the build log is the only place to confirm they reached this project.
-//
-// Report only for now. Once the variable names are confirmed this becomes a
-// hard failure for the ones the app needs.
+// Confirms the build can see the variables the app needs. Prints names only,
+// never values. Vercel's project env API does not list linked shared
+// variables, so the build log is where we confirm they reached this project.
+// Production fails closed: a missing variable stops the deploy instead of
+// shipping an app that cannot reach its database.
 
-const PATTERN = /SUPABASE|POSTGRES|DATABASE|RESEND|MAIL|VAPID|AMAZON/i
+const REQUIRED = ['SUPABASE_LOCATION', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_DB_URL']
+// Bypasses every access rule in the shared Supabase project. Nothing here
+// needs it, so it should not be linked to this project at all.
+const UNWANTED = ['SUPABASE_PRIVATE_KEY']
 
-const present = Object.keys(process.env).filter((k) => PATTERN.test(k)).sort()
+const env = process.env.VERCEL_ENV ?? 'local'
+console.log(`[check-env] VERCEL_ENV=${env}`)
 
-console.log(`[check-env] VERCEL_ENV=${process.env.VERCEL_ENV ?? 'local'}`)
-if (present.length === 0) {
-  console.log('[check-env] no integration variables visible to this build')
-} else {
-  for (const k of present) {
-    const empty = process.env[k] === '' ? ' (empty)' : ''
-    console.log(`[check-env] present: ${k}${empty}`)
-  }
+const missing = []
+for (const k of REQUIRED) {
+  const ok = !!process.env[k]
+  console.log(`[check-env] ${ok ? 'present' : 'MISSING'}: ${k}`)
+  if (!ok) missing.push(k)
+}
+for (const k of UNWANTED) {
+  if (process.env[k]) console.log(`[check-env] WARNING ${k} is linked to this project and should not be`)
+}
+
+if (missing.length && env === 'production') {
+  console.error(`[check-env] refusing a production build without: ${missing.join(', ')}`)
+  process.exit(1)
 }

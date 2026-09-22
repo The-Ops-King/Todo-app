@@ -5,10 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/check-env.mjs && vite build",
-    "preview": "vite preview"
+    "build": "node scripts/check-env.mjs && node scripts/migrate.mjs && vite build",
+    "preview": "vite preview",
+    "test": "node scripts/test-db.mjs",
+    "test:db": "node scripts/test-db.mjs"
   },
   "dependencies": {
+    "pg": "^8.23.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
