@@ -31,6 +31,11 @@ if (!raw) {
 // sslmode in the URL would override the ssl object below and turn off
 // certificate checks, so strip it and verify against Supabase's root CA.
 const url = new URL(raw)
+if (!/^postgres(ql)?:$/.test(url.protocol)) {
+  console.error(`[migrate] SUPABASE_DB_URL is a ${url.protocol}// address, not a database connection string.`)
+  console.error('[migrate] Use Supabase > Connect > Session pooler. It starts with postgresql://')
+  process.exit(1)
+}
 url.searchParams.delete('sslmode')
 if (url.port === '6543') {
   console.error('[migrate] SUPABASE_DB_URL is the Transaction pooler (6543). Use the Session pooler string (port 5432).')
