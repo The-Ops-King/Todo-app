@@ -14,6 +14,9 @@ Status: draft for approval. Nothing below is built yet.
 | Platform | PWA (installable web app). Native later only if usage justifies it. |
 | Frontend | Vite + React, deployed on Vercel at `todo.jtylerray.com` for now. |
 | Backend | Supabase: Postgres, auth, row level security, `pg_cron`, one Edge Function for push. The browser talks to Supabase directly. There is no separate API server. |
+| Supabase project | Your existing project, shared with your other apps. Everything lives in its own `todo` schema, not `public`. |
+| Migrations | SQL files in `supabase/migrations`, applied in order by every production deploy using `SUPABASE_DB_URL`. A failed migration fails the deploy. Preview deploys never touch the database. |
+| Adult sign in | 6 digit code by email, sent through Resend as Supabase's SMTP. |
 | Notifications | Web push only. One daily summary per person at a time they pick. No email reminders, no SMS. |
 | Invites | Invite links, shared however you like (text, AirDrop). The app never sends email. |
 | Kids | Username + PIN login created by an admin. No email needed. |
@@ -133,7 +136,7 @@ One accidental tap should never push the oil change out 6 months.
 
 ## Accounts and onboarding
 
-**Adults** sign in (method is an open decision, below).
+**Adults** sign in with a 6 digit code emailed through Resend, not a clickable magic link. On iOS a link in an email opens in Safari, and Safari and the installed Home Screen app do not share a login, so a magic link would log you into the wrong one. Typing a code into the app avoids that.
 
 **Kids.** An admin creates the kid: display name, username, PIN (6 digits minimum). Under the hood the kid is a normal Supabase user with a placeholder email on a domain we control that never receives mail. The login screen takes username + PIN, and an Edge Function maps the username to that account. Admins reset kid PINs. A 4 digit PIN is too easy to guess, so 6 is the minimum.
 
@@ -242,11 +245,11 @@ Each step ends working and tested before the next starts.
 7. **Affiliate links.** Buy queries, tag, disclosure.
 8. **Repo docs.** `CLAUDE.md` with the same "learned the expensive way" notes Leak-calc has.
 
+## Later, not v1
+
+- **Mileage.** v1 is time based only, and presets use the time half of "6 months or 5,000 miles". Later: a monthly prompt to enter the odometer, and tasks that can be due on miles, engine hours or time, whichever comes first.
+- **Rotation pile-up.** Revisit overdue items staying with the person who missed them once the family is using it.
+
 ## Open decisions
 
-1. **Adult sign in.** Supabase needs some way to prove who an adult is, and every option except social login sends an email:
-   - Sign in with Google. No email sent, no password to reset. Recommended.
-   - Email magic link. Supabase's built-in mailer is rate limited to a few per hour and is not for production, so this would bring back Resend just for login emails.
-   - Email + password with confirmation off. No email sent, but also no way to reset a forgotten password.
-2. **Mileage.** Car, motorcycle and boat maintenance is often mileage or engine hours based. v1 is time based only, and presets use the time half of "6 months or 5,000 miles". Tracking miles means someone typing in the odometer, which is its own feature.
-3. **Preset content.** See `presets/DRAFT.md`. Nothing is seeded until you approve it.
+1. **Preset content.** See `presets/DRAFT.md`. Nothing is seeded until you approve it.
