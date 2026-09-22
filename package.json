@@ -11,6 +11,7 @@
     "test:db": "node scripts/test-db.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.0",
     "pg": "^8.23.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

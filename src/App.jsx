@@ -1,0 +1,66 @@
+import { useCallback, useEffect, useState } from 'react'
+import { configured, supabase } from './lib/supabase.js'
+import SignIn from './screens/SignIn.jsx'
+import Onboarding from './screens/Onboarding.jsx'
+import Home from './screens/Home.jsx'
+
+// signed out -> SignIn; signed in without a To Do Dash profile -> Onboarding;
+// otherwise Home. The shared Supabase project means a signed-in person may
+// exist in auth without belonging to this app, so the profile row decides.
+export default function App() {
+  const [session, setSession] = useState(undefined)
+  const [profile, setProfile] = useState(undefined)
+  const [loadError, setLoadError] = useState('')
+
+  useEffect(() => {
+    if (!configured) return
+    supabase.auth.getSession().then(({ data }) => setSession(data.session))
+    const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
+    return () => data.subscription.unsubscribe()
+  }, [])
+
+  const loadProfile = useCallback(async () => {
+    if (!session) {
+      setProfile(undefined)
+      return
+    }
+    setLoadError('')
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, family_id, display_name, role')
+      .eq('id', session.user.id)
+      .maybeSingle()
+    if (error) setLoadError(error.message)
+    else setProfile(data)
+  }, [session])
+
+  useEffect(() => {
+    loadProfile()
+  }, [loadProfile])
+
+  if (!configured) {
+    return <Shell><p className="error">This build is missing its Supabase settings.</p></Shell>
+  }
+  if (session === undefined) return <Shell><p className="muted">Loading…</p></Shell>
+  if (!session) return <Shell><SignIn /></Shell>
+  if (loadError) {
+    return (
+      <Shell>
+        <p className="error">Could not load your account: {loadError}</p>
+        <button onClick={loadProfile}>Try again</button>
+      </Shell>
+    )
+  }
+  if (profile === undefined) return <Shell><p className="muted">Loading…</p></Shell>
+  if (profile === null) return <Shell><Onboarding onDone={loadProfile} email={session.user.email} /></Shell>
+  return <Shell><Home profile={profile} /></Shell>
+}
+
+function Shell({ children }) {
+  return (
+    <div className="shell">
+      <header className="brand">To Do Dash</header>
+      <main>{children}</main>
+    </div>
+  )
+}
