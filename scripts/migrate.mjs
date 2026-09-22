@@ -4,7 +4,7 @@
 // code never ships against a half-migrated schema.
 //
 // After migrating it prints two read-only checks to the build log:
-//   - whether the `todo` schema is exposed to the Supabase API
+//   - whether the live Supabase API accepts the `todo` schema
 //   - policies in other schemas that let any signed-in user read everything.
 //     This project shares one user list with other apps, so a To Do Dash user
 //     would pass those policies.
@@ -73,14 +73,7 @@ try {
   console.log('[migrate] connected')
   await applyMigrations(client, join(root, 'supabase/migrations'))
 
-  const { rows: cfg } = await client.query(
-    "select unnest(rolconfig) as setting from pg_roles where rolname = 'authenticator'")
-  const schemas = cfg.map((r) => r.setting).find((s) => s.startsWith('pgrst.db_schemas='))
-  if (schemas && schemas.split('=')[1].split(',').map((s) => s.trim()).includes('todo')) {
-    console.log('[migrate] todo schema is exposed to the API')
-  } else {
-    console.log('[migrate] WARNING todo schema is not exposed to the API. Add it under Settings > API > Exposed schemas.')
-  }
+  await checkApiExposure()
 
   const { rows: open } = await client.query(`
     select schemaname, tablename, policyname, cmd
@@ -100,4 +93,26 @@ try {
   process.exit(1)
 } finally {
   await client.end().catch(() => {})
+}
+
+// Asks the live API for a todo table. PGRST106 means the schema is not in the
+// exposed list. Any other answer, including a permission error for the
+// anonymous key, means the API accepted the schema.
+async function checkApiExposure() {
+  const base = process.env.SUPABASE_LOCATION
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY
+  try {
+    const res = await fetch(`${base.replace(/\/$/, '')}/rest/v1/presets?select=id&limit=1`, {
+      headers: { apikey: key, 'Accept-Profile': 'todo' },
+      signal: AbortSignal.timeout(10000),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (body?.code === 'PGRST106') {
+      console.log('[migrate] WARNING the API does not expose the todo schema. Add it under Settings > Data API > Exposed schemas.')
+    } else {
+      console.log(`[migrate] API accepts the todo schema (HTTP ${res.status}${body?.code ? `, ${body.code}` : ''})`)
+    }
+  } catch (err) {
+    console.log(`[migrate] WARNING could not reach the Supabase API to check the schema: ${err.message}`)
+  }
 }
