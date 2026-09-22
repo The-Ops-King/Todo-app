@@ -14,6 +14,7 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { applyMigrations } from './lib/migrations.mjs'
+import { supabaseUrl } from './lib/supabase-url.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -99,10 +100,10 @@ try {
 // exposed list. Any other answer, including a permission error for the
 // anonymous key, means the API accepted the schema.
 async function checkApiExposure() {
-  const base = process.env.SUPABASE_LOCATION
   const key = process.env.SUPABASE_PUBLISHABLE_KEY
   try {
-    const res = await fetch(`${base.replace(/\/$/, '')}/rest/v1/presets?select=id&limit=1`, {
+    const base = supabaseUrl(process.env.SUPABASE_LOCATION)
+    const res = await fetch(`${base}/rest/v1/presets?select=id&limit=1`, {
       headers: { apikey: key, 'Accept-Profile': 'todo' },
       signal: AbortSignal.timeout(10000),
     })
