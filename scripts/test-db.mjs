@@ -45,6 +45,12 @@ await applyMigrations(db, join(root, 'supabase/migrations'), () => {})
 
 let passed = 0
 const failures = []
+let reported = false
+// A rule broken badly enough can make a later step throw instead of failing a
+// check. Say so plainly rather than leaving only a stack trace.
+process.on('exit', (code) => {
+  if (!reported) console.error(`test-db: crashed after ${passed} passed, ${failures.length} failed (exit ${code})`)
+})
 let today = '2026-09-22'
 
 function check(name, cond, detail = '') {
@@ -53,12 +59,15 @@ function check(name, cond, detail = '') {
 }
 
 // Run fn inside one transaction as `uid`, the way a browser request runs.
+// Kid devices hold anonymous sessions; their claims say so, as Supabase's do.
+const anonymous = new Set()
+
 async function as(uid, fn) {
   await db.query('begin')
   try {
     await db.query('set local role authenticated')
     await db.query("select set_config('request.jwt.claims', $1, true)", [
-      uid ? JSON.stringify({ sub: uid, role: 'authenticated' }) : '',
+      uid ? JSON.stringify({ sub: uid, role: 'authenticated', is_anonymous: anonymous.has(uid) }) : '',
     ])
     await db.query("select set_config('todo.today_override', $1, true)", [today])
     const out = await fn({
@@ -92,6 +101,13 @@ async function superuser(sql, params) {
 async function newUser(email) {
   const id = randomUUID()
   await superuser('insert into auth.users (id, email) values ($1, $2)', [id, email])
+  return id
+}
+
+async function newDevice() {
+  const id = randomUUID()
+  await superuser('insert into auth.users (id) values ($1)', [id])
+  anonymous.add(id)
   return id
 }
 
@@ -183,6 +199,15 @@ await fails('members cannot invite', kid1, ({ q }) => q('select todo.create_invi
 const strangerFamily = (await as(stranger, ({ one }) =>
   one("select todo.create_family('Other', 'Stranger', 'America/New_York') as id"))).id
 
+// Profile ids are separate from auth user ids. P maps a login to its profile,
+// U maps back. Tests pass profile ids wherever the app would.
+const P = {}
+for (const u of [dad, mom, kid1, kid2, stranger]) {
+  P[u] = (await superuser('select id from todo.profiles where user_id = $1', [u]))[0].id
+}
+const U = Object.fromEntries(Object.entries(P).map(([u, p]) => [p, u]))
+check('profile ids are not login ids', Object.entries(P).every(([u, p]) => u !== p))
+
 {
   const members = await as(kid1, ({ rows }) => rows('select display_name, role from todo.profiles order by display_name'))
   check('family sees its four members', members.length === 4, JSON.stringify(members))
@@ -212,17 +237,17 @@ await fails('no direct task insert', dad, ({ q }) =>
 await fails('no direct occurrence update', dad,
   ({ q }) => q("update todo.occurrences set status = 'done'"), /permission denied/)
 await fails('cannot promote yourself', kid1,
-  ({ q }) => q("update todo.profiles set role = 'admin' where id = $1", [kid1]), /permission denied/)
+  ({ q }) => q("update todo.profiles set role = 'admin' where id = $1", [P[kid1]]), /permission denied/)
 await fails('internal functions are not callable', kid1,
   ({ q }) => q('select todo.rollover_all()'), /permission denied/)
 await fails('cannot call rollover for another family', kid1,
   ({ q }) => q('select todo.rollover_family($1)', [strangerFamily]), /permission denied/)
 {
-  await as(kid1, ({ q }) => q("update todo.profiles set display_name = 'Kiddo' where id = $1", [kid1]))
-  const r = await as(kid1, ({ one }) => one('select display_name from todo.profiles where id = $1', [kid1]))
+  await as(kid1, ({ q }) => q("update todo.profiles set display_name = 'Kiddo' where id = $1", [P[kid1]]))
+  const r = await as(kid1, ({ one }) => one('select display_name from todo.profiles where id = $1', [P[kid1]]))
   check('can rename yourself', r.display_name === 'Kiddo')
-  await as(kid1, ({ q }) => q("update todo.profiles set display_name = 'Hacked' where id = $1", [dad]))
-  const d = await as(dad, ({ one }) => one('select display_name from todo.profiles where id = $1', [dad]))
+  await as(kid1, ({ q }) => q("update todo.profiles set display_name = 'Hacked' where id = $1", [P[dad]]))
+  const d = await as(dad, ({ one }) => one('select display_name from todo.profiles where id = $1', [P[dad]]))
   check('cannot rename someone else', d.display_name === 'Dad')
 }
 
@@ -230,7 +255,7 @@ await fails('cannot call rollover for another family', kid1,
 
 const oil = await createTask(dad, {
   scope: 'family', title: 'Oil change', schedule_kind: 'countdown',
-  interval_unit: 'month', interval_count: 6, assignees: [dad], last_done_on: '2026-03-10',
+  interval_unit: 'month', interval_count: 6, assignees: [P[dad]], last_done_on: '2026-03-10',
 })
 check('last done Mar 10 + 6 months = Sep 10',
   (await openOf(dad, oil))[0]?.due_on === '2026-09-10')
@@ -238,19 +263,19 @@ check('last done Mar 10 + 6 months = Sep 10',
 await fails('members cannot create family tasks', kid1, ({ q }) =>
   q('select todo.create_task($1)', [JSON.stringify({
     scope: 'family', title: 'x', schedule_kind: 'countdown', interval_unit: 'day',
-    interval_count: 1, assignees: [kid1], unsure: true })]), /only admins/)
+    interval_count: 1, assignees: [P[kid1]], unsure: true })]), /only admins/)
 await fails('assignee from another family', dad, ({ q }) =>
   q('select todo.create_task($1)', [JSON.stringify({
     scope: 'family', title: 'x', schedule_kind: 'countdown', interval_unit: 'day',
-    interval_count: 1, assignees: [stranger], unsure: true })]), /not in this family/)
+    interval_count: 1, assignees: [P[stranger]], unsure: true })]), /not in this family/)
 await fails('pool needs two people', dad, ({ q }) =>
   q('select todo.create_task($1)', [JSON.stringify({
     scope: 'family', title: 'x', schedule_kind: 'countdown', interval_unit: 'day',
-    interval_count: 1, assign_mode: 'pool', assignees: [kid1], unsure: true })]), /two or more/)
+    interval_count: 1, assign_mode: 'pool', assignees: [P[kid1]], unsure: true })]), /two or more/)
 await fails('must say how to start', dad, ({ q }) =>
   q('select todo.create_task($1)', [JSON.stringify({
     scope: 'family', title: 'x', schedule_kind: 'countdown', interval_unit: 'day',
-    interval_count: 1, assignees: [kid1] })]), /exactly one of/)
+    interval_count: 1, assignees: [P[kid1]] })]), /exactly one of/)
 
 const diary = await createTask(kid1, {
   scope: 'personal', title: 'Diary', schedule_kind: 'countdown',
@@ -282,7 +307,7 @@ today = '2026-10-01'
 
 const filter = await createTask(dad, {
   scope: 'family', title: 'Furnace filter', schedule_kind: 'calendar',
-  cal_months: [1, 7], cal_month_days: [1], assignees: [mom], first_due_on: '2026-01-01',
+  cal_months: [1, 7], cal_month_days: [1], assignees: [P[mom]], first_due_on: '2026-01-01',
 })
 {
   today = '2026-08-05'
@@ -295,7 +320,7 @@ const filter = await createTask(dad, {
 
 const homework = await createTask(dad, {
   scope: 'family', title: 'Homework', schedule_kind: 'calendar',
-  cal_weekdays: [1, 2, 3, 4, 5], assignees: [kid1], first_due_on: '2026-09-18',
+  cal_weekdays: [1, 2, 3, 4, 5], assignees: [P[kid1]], first_due_on: '2026-09-18',
 })
 {
   today = '2026-09-19' // Saturday; Friday's homework is overdue
@@ -312,7 +337,7 @@ const homework = await createTask(dad, {
 
 const bins = await createTask(dad, {
   scope: 'family', title: 'Wipe counters', schedule_kind: 'calendar',
-  cal_weekdays: [0, 1, 2, 3, 4, 5, 6], assignees: [mom], first_due_on: '2026-09-18',
+  cal_weekdays: [0, 1, 2, 3, 4, 5, 6], assignees: [P[mom]], first_due_on: '2026-09-18',
 })
 {
   today = '2026-09-19'
@@ -338,7 +363,7 @@ const vitamins = await createTask(mom, {
 
 const mow = await createTask(dad, {
   scope: 'family', title: 'Mow', schedule_kind: 'countdown', interval_unit: 'week',
-  interval_count: 1, active_months: [4, 5, 6, 7, 8, 9, 10], assignees: [dad], first_due_on: '2026-10-28',
+  interval_count: 1, active_months: [4, 5, 6, 7, 8, 9, 10], assignees: [P[dad]], first_due_on: '2026-10-28',
 })
 {
   today = '2026-10-28'
@@ -348,7 +373,7 @@ const mow = await createTask(dad, {
   check('mowing sleeps until April', next[0]?.due_on === '2027-04-01', next[0]?.due_on)
   const outOfSeason = await createTask(dad, {
     scope: 'family', title: 'Rake', schedule_kind: 'countdown', interval_unit: 'week',
-    interval_count: 1, active_months: [10, 11], assignees: [dad], first_due_on: '2026-05-01',
+    interval_count: 1, active_months: [10, 11], assignees: [P[dad]], first_due_on: '2026-05-01',
   })
   check('first due date is pulled into the window', (await openOf(dad, outOfSeason))[0]?.due_on === '2026-10-01')
 }
@@ -357,7 +382,7 @@ const mow = await createTask(dad, {
 
 const pool = await createTask(dad, {
   scope: 'family', title: 'Empty dishwasher', schedule_kind: 'countdown', interval_unit: 'day',
-  interval_count: 1, assign_mode: 'pool', assignees: [kid1, kid2], first_due_on: '2026-09-22',
+  interval_count: 1, assign_mode: 'pool', assignees: [P[kid1], P[kid2]], first_due_on: '2026-09-22',
 })
 {
   today = '2026-09-22'
@@ -370,7 +395,7 @@ const pool = await createTask(dad, {
     ({ q }) => q('select todo.complete_occurrence($1)', [o.id]), /not allowed/)
   await complete(kid2, o.id)
   const done = await as(dad, ({ one }) => one('select completed_by from todo.occurrences where id = $1', [o.id]))
-  check('pool records who did it', done.completed_by === kid2)
+  check('pool records who did it', done.completed_by === P[kid2])
 }
 
 {
@@ -408,7 +433,7 @@ const pool = await createTask(dad, {
 
 const pool2 = await createTask(dad, {
   scope: 'family', title: 'Pool care', schedule_kind: 'countdown', interval_unit: 'week',
-  interval_count: 1, assignees: [kid2], first_due_on: '2026-09-22', subtasks: ['Skim', 'Brush', 'Test'],
+  interval_count: 1, assignees: [P[kid2]], first_due_on: '2026-09-22', subtasks: ['Skim', 'Brush', 'Test'],
 })
 {
   today = '2026-09-22'
@@ -437,7 +462,7 @@ const pool2 = await createTask(dad, {
 
 const trash = await createTask(dad, {
   scope: 'family', title: 'Trash', schedule_kind: 'calendar', cal_weekdays: [2],
-  assign_mode: 'rotate_completion', assignees: [kid1, kid2], first_due_on: '2026-09-22',
+  assign_mode: 'rotate_completion', assignees: [P[kid1], P[kid2]], first_due_on: '2026-09-22',
 })
 {
   today = '2026-09-22'
@@ -447,31 +472,31 @@ const trash = await createTask(dad, {
     seq.push(o.responsible_id)
     await complete(dad, o.id)
   }
-  check('rotation per completion alternates', seq[0] === kid1 && seq[1] === kid2 && seq[2] === kid1,
+  check('rotation per completion alternates', seq[0] === P[kid1] && seq[1] === P[kid2] && seq[2] === P[kid1],
     JSON.stringify(seq))
   const doneLast = await as(dad, ({ one }) =>
     one("select id from todo.occurrences where task_id = $1 and status = 'done' order by completed_at desc limit 1", [trash]))
   await as(dad, ({ q }) => q('select todo.undo_completion($1)', [doneLast.id]))
   const [reopened] = await openOf(dad, trash)
-  check('undo puts the rotation back', reopened.responsible_id === kid1)
+  check('undo puts the rotation back', reopened.responsible_id === P[kid1])
 }
 
 const dishes = await createTask(dad, {
   scope: 'family', title: 'Unload dishwasher', schedule_kind: 'countdown', interval_unit: 'day',
   interval_count: 1, assign_mode: 'rotate_period', rotate_unit: 'week', rotate_count: 1,
-  rotate_anchor: '2026-09-14', assignees: [kid1, kid2], first_due_on: '2026-09-18',
+  rotate_anchor: '2026-09-14', assignees: [P[kid1], P[kid2]], first_due_on: '2026-09-18',
 })
 {
   today = '2026-09-18' // Friday, week of Sep 14 belongs to kid1
   const [fri] = await openOf(kid1, dishes)
-  check('week one belongs to kid one', fri.responsible_id === kid1)
+  check('week one belongs to kid one', fri.responsible_id === P[kid1])
 
   today = '2026-09-21' // Monday, week of Sep 21 belongs to kid2; Friday still open
   await as(kid1, ({ q }) => q('select todo.rollover()'))
   const open = await openOf(kid1, dishes)
   check('overdue stays with the kid who missed it',
-    open.length === 2 && open[0].responsible_id === kid1 && open[0].due_on === '2026-09-18')
-  check('new holder gets a fresh one today', open[1]?.responsible_id === kid2 && open[1]?.due_on === '2026-09-21')
+    open.length === 2 && open[0].responsible_id === P[kid1] && open[0].due_on === '2026-09-18')
+  check('new holder gets a fresh one today', open[1]?.responsible_id === P[kid2] && open[1]?.due_on === '2026-09-21')
   await as(kid1, ({ q }) => q('select todo.rollover()'))
   check('rollover is idempotent', (await openOf(kid1, dishes)).length === 2)
 
@@ -479,7 +504,7 @@ const dishes = await createTask(dad, {
   check('finishing the old one does not spawn a duplicate', (await openOf(kid1, dishes)).length === 1)
   await complete(kid2, open[1].id)
   const [tue] = await openOf(kid2, dishes)
-  check('rotation continues on the right person', tue.responsible_id === kid2 && tue.due_on === '2026-09-22')
+  check('rotation continues on the right person', tue.responsible_id === P[kid2] && tue.due_on === '2026-09-22')
 }
 
 // --- skip policy ---------------------------------------------------------------
@@ -506,48 +531,48 @@ const read = await createTask(kid1, {
 {
   const chore = await createTask(mom, {
     scope: 'family', title: 'Clean room', schedule_kind: 'calendar', cal_weekdays: [6],
-    assignees: [kid1], first_due_on: '2026-09-26',
+    assignees: [P[kid1]], first_due_on: '2026-09-26',
   })
   const [o] = await openOf(kid1, chore)
   await fails('someone else cannot hand it off', kid2,
-    ({ q }) => q('select todo.hand_back($1, $2)', [o.id, kid2]), /not allowed/)
+    ({ q }) => q('select todo.hand_back($1, $2)', [o.id, P[kid2]]), /not allowed/)
   await fails('cannot hand to an outsider', kid1,
-    ({ q }) => q('select todo.hand_back($1, $2)', [o.id, stranger]), /not in this family/)
-  await as(kid1, ({ q }) => q('select todo.hand_back($1, $2)', [o.id, dad]))
+    ({ q }) => q('select todo.hand_back($1, $2)', [o.id, P[stranger]]), /not in this family/)
+  await as(kid1, ({ q }) => q('select todo.hand_back($1, $2)', [o.id, P[dad]]))
   const [after] = await openOf(dad, chore)
   const assignee = await as(dad, ({ one }) => one('select profile_id from todo.task_assignees where task_id = $1', [chore]))
-  check('single mode hand back moves the task', after.responsible_id === dad && assignee.profile_id === dad)
+  check('single mode hand back moves the task', after.responsible_id === P[dad] && assignee.profile_id === P[dad])
   const feed = await as(mom, ({ rows }) =>
     rows("select payload from todo.activity where kind = 'handed_back' and task_id = $1", [chore]))
-  check('hand back shows in the activity feed', feed.length === 1 && feed[0].payload.to === dad)
+  check('hand back shows in the activity feed', feed.length === 1 && feed[0].payload.to === P[dad])
   const strangerFeed = await as(stranger, ({ rows }) => rows('select 1 from todo.activity'))
   check('activity stays inside the family', strangerFeed.length === 0)
 
   const [t] = await openOf(dad, trash)
   const holder = t.responsible_id
-  await as(holder, ({ q }) => q('select todo.hand_back($1, $2)', [t.id, mom]))
+  await as(U[holder], ({ q }) => q('select todo.hand_back($1, $2)', [t.id, P[mom]]))
   const order = await as(dad, ({ rows }) =>
     rows('select profile_id from todo.task_assignees where task_id = $1 order by position', [trash]))
   const [moved] = await openOf(dad, trash)
   check('rotation hand back moves only this one',
-    moved.responsible_id === mom && order.map((r) => r.profile_id).join() === [kid1, kid2].join())
+    moved.responsible_id === P[mom] && order.map((r) => r.profile_id).join() === [P[kid1], P[kid2]].join())
 
   const [p] = await openOf(kid1, pool)
   await fails('pool tasks cannot be handed off', kid1,
-    ({ q }) => q('select todo.hand_back($1, $2)', [p.id, dad]), /cannot be handed/)
+    ({ q }) => q('select todo.hand_back($1, $2)', [p.id, P[dad]]), /cannot be handed/)
 }
 
 // --- members and admins ----------------------------------------------------------
 
 await fails('removing someone with tasks is blocked', dad,
-  ({ q }) => q('select todo.remove_member($1)', [kid2]), /reassign or delete/)
+  ({ q }) => q('select todo.remove_member($1)', [P[kid2]]), /reassign or delete/)
 await fails('members cannot remove people', kid1,
-  ({ q }) => q('select todo.remove_member($1)', [kid2]), /only admins/)
+  ({ q }) => q('select todo.remove_member($1)', [P[kid2]]), /only admins/)
 await fails('last admin cannot step down', stranger,
-  ({ q }) => q("select todo.set_role($1, 'member')", [stranger]), /at least one admin/)
-await as(dad, ({ q }) => q("select todo.set_role($1, 'member')", [dad]))
+  ({ q }) => q("select todo.set_role($1, 'member')", [P[stranger]]), /at least one admin/)
+await as(dad, ({ q }) => q("select todo.set_role($1, 'member')", [P[dad]]))
 check('an admin can step down while another remains', true)
-await as(mom, ({ q }) => q("select todo.set_role($1, 'admin')", [dad]))
+await as(mom, ({ q }) => q("select todo.set_role($1, 'admin')", [P[dad]]))
 
 {
   await fails('members cannot delete family tasks', kid1,
@@ -557,6 +582,94 @@ await as(mom, ({ q }) => q("select todo.set_role($1, 'admin')", [dad]))
   check('deleted tasks disappear', gone.length === 0)
   await as(kid1, ({ q }) => q('select todo.delete_task($1)', [diary]))
   check('you can delete your own personal task', true)
+}
+
+// --- kid accounts ------------------------------------------------------------------
+
+{
+  today = '2026-09-22'
+  const sally = (await as(dad, ({ one }) => one("select todo.add_kid('Sally') as id"))).id
+  await fails('members cannot add kids', kid1, ({ q }) => q("select todo.add_kid('Nope')"), /only admins/)
+  const row = (await superuser('select role, is_kid, user_id from todo.profiles where id = $1', [sally]))[0]
+  check('kid is a member with no login yet', row.role === 'member' && row.is_kid && row.user_id === null)
+
+  await fails('kids cannot be made admins', dad,
+    ({ q }) => q("select todo.set_role($1, 'admin')", [sally]), /cannot be admins/)
+  await fails('members cannot make setup codes', kid1,
+    ({ q }) => q('select todo.kid_setup_code($1)', [sally]), /only admins/)
+  await fails('setup codes are only for kid profiles', dad,
+    ({ q }) => q('select todo.kid_setup_code($1)', [P[kid1]]), /kid not found/)
+  await fails('another family cannot make codes for your kid', stranger,
+    ({ q }) => q('select todo.kid_setup_code($1)', [sally]), /kid not found/)
+
+  const codeFor = () => as(dad, ({ one }) => one('select todo.kid_setup_code($1) as c', [sally])).then((r) => r.c)
+  const code = await codeFor()
+  check('setup code is 8 unambiguous characters', /^[A-HJ-NP-Z2-9]{8}$/.test(code), code)
+
+  const phone = await newDevice()
+  await fails('an email account cannot claim a kid', nobody,
+    ({ q }) => q('select todo.claim_kid_setup($1)', [code]), /for kid devices/)
+  await fails('a wrong code is refused', phone,
+    ({ q }) => q("select todo.claim_kid_setup('ZZZZ-ZZZZ')"), /wrong or has expired/)
+  await fails('a device session cannot create a family', phone,
+    ({ q }) => q("select todo.create_family('X', 'X', 'America/Chicago')"), /sign in with your email/)
+  const kidInvite = await inviteFor(dad)
+  await fails('a device session cannot take an adult invite', phone,
+    ({ q }) => q("select todo.accept_invite($1, 'X')", [kidInvite]), /sign in with your email/)
+
+  const typed = `${code.slice(0, 4).toLowerCase()}-${code.slice(4)}`
+  const fam = await as(phone, ({ one }) => one('select todo.claim_kid_setup($1) as f', [typed])).then((r) => r.f)
+  check('claim is case and dash insensitive and joins the family', fam === family)
+  await fails('a code works once', await newDevice(),
+    ({ q }) => q('select todo.claim_kid_setup($1)', [code]), /wrong or has expired/)
+  await fails('a set up device cannot claim again', phone,
+    ({ q }) => q('select todo.claim_kid_setup($1)', [code]), /already set up/)
+
+  const me = await as(phone, ({ one }) => one('select id, display_name, is_kid from todo.profiles where user_id = auth.uid()'))
+  check('the device is Sally', me.id === sally && me.display_name === 'Sally' && me.is_kid)
+
+  // Dad assigns, Sally sees it and checks it off, Dad sees who did it.
+  const unload = await createTask(dad, {
+    scope: 'family', title: 'Unload dishwasher', schedule_kind: 'countdown', interval_unit: 'day',
+    interval_count: 1, assignees: [sally], first_due_on: '2026-09-22',
+  })
+  const [mine] = await openOf(phone, unload)
+  check('Sally sees her chore', mine?.responsible_id === sally)
+  await complete(phone, mine.id)
+  const seen = await as(dad, ({ one }) =>
+    one("select p.display_name from todo.occurrences o join todo.profiles p on p.id = o.completed_by where o.id = $1", [mine.id]))
+  check('Dad sees Sally did it', seen?.display_name === 'Sally')
+  await fails('Sally cannot delete family tasks', phone,
+    ({ q }) => q('select todo.delete_task($1)', [unload]), /only admins/)
+  await fails('Sally cannot invite people', phone, ({ q }) => q('select todo.create_invite()'), /only admins/)
+
+  // New phone: a new code moves Sally, and the old phone loses her.
+  await superuser("update todo.kid_setup_codes set expires_at = now() - interval '1 second' where used_at is null")
+  const stale = await codeFor()
+  await superuser("update todo.kid_setup_codes set expires_at = now() - interval '1 second' where used_at is null")
+  await fails('expired codes are refused', await newDevice(),
+    ({ q }) => q('select todo.claim_kid_setup($1)', [stale]), /wrong or has expired/)
+  const first = await codeFor()
+  const second = await codeFor()
+  await fails('a newer code cancels the older one', await newDevice(),
+    ({ q }) => q('select todo.claim_kid_setup($1)', [first]), /wrong or has expired/)
+  const newPhone = await newDevice()
+  await as(newPhone, ({ q }) => q('select todo.claim_kid_setup($1)', [second]))
+  const oldView = await as(phone, ({ rows }) => rows('select id from todo.tasks'))
+  const newView = await openOf(newPhone, unload)
+  check('the old phone sees nothing', oldView.length === 0)
+  check('the new phone has Sally\'s chores', newView.length === 1 && newView[0].responsible_id === sally)
+
+  // Buy links: kids never, adults unless an admin hides them.
+  await fails('members cannot hide buy links', kid1,
+    ({ q }) => q('select todo.set_buy_links_hidden($1, true)', [P[kid2]]), /only admins/)
+  await as(dad, ({ q }) => q('select todo.set_buy_links_hidden($1, true)', [P[kid2]]))
+  const flags = await as(kid2, ({ one }) => one('select hide_buy_links from todo.profiles where id = $1', [P[kid2]]))
+  check('admin can hide buy links for a person', flags.hide_buy_links === true)
+  await fails('nobody can flip their own flag directly', kid2,
+    ({ q }) => q('update todo.profiles set hide_buy_links = false where id = $1', [P[kid2]]), /permission denied/)
+  await fails('setup codes are not readable', dad,
+    ({ q }) => q('select * from todo.kid_setup_codes'), /permission denied/)
 }
 
 // --- invariant: every live task has an open occurrence ------------------------
@@ -572,6 +685,7 @@ await as(mom, ({ q }) => q("select todo.set_role($1, 'admin')", [dad]))
 // --- report ------------------------------------------------------------------------
 
 await db.end()
+reported = true
 if (failures.length) {
   console.error(`test-db: ${failures.length} failed, ${passed} passed`)
   for (const f of failures) console.error(`  x ${f}`)

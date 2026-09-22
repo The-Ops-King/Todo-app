@@ -97,7 +97,7 @@ button.link {
 .row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
 
 .members { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
-.members li { display: flex; align-items: center; gap: 8px; }
+
 
 .tag {
   font-size: 0.75rem;
@@ -115,4 +115,20 @@ button.link {
   border-radius: 8px;
   background: var(--bg);
   border: 1px solid var(--line);
+}
+
+.member { display: grid; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.member:last-child { border-bottom: 0; padding-bottom: 0; }
+.member-row { display: flex; align-items: center; gap: 8px; }
+
+.toggle { display: flex; align-items: center; gap: 8px; font-weight: 400; font-size: 0.9rem; color: var(--muted); }
+.toggle input { width: auto; }
+
+.setup-code { display: grid; gap: 6px; padding: 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
+.code-display {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-align: center;
 }

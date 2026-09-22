@@ -17,6 +17,18 @@ export default function SignIn() {
     return () => clearTimeout(t)
   }, [wait])
 
+  // A kid's phone gets an anonymous session straight away; the app then shows
+  // the setup code screen for it.
+  async function startKidSetup() {
+    setBusy(true)
+    setError('')
+    const { error } = await supabase.auth.signInAnonymously()
+    setBusy(false)
+    if (error) setError(/disabled/i.test(error.message)
+      ? "Kid setup isn't switched on yet. A parent needs to turn on anonymous sign-ins in Supabase."
+      : errorText(error))
+  }
+
   async function sendCode(e) {
     e?.preventDefault()
     const address = email.trim().toLowerCase()
@@ -59,6 +71,9 @@ export default function SignIn() {
         </label>
         {error && <p className="error">{error}</p>}
         <button disabled={busy}>{busy ? 'Sending…' : 'Email me a code'}</button>
+        <button type="button" className="link" disabled={busy} onClick={startKidSetup}>
+          Setting up a kid's phone?
+        </button>
       </form>
     )
   }

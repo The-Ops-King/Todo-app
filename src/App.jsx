@@ -3,8 +3,10 @@ import { configured, supabase } from './lib/supabase.js'
 import SignIn from './screens/SignIn.jsx'
 import Onboarding from './screens/Onboarding.jsx'
 import Home from './screens/Home.jsx'
+import KidSetup from './screens/KidSetup.jsx'
 
-// signed out -> SignIn; signed in without a To Do Dash profile -> Onboarding;
+// signed out -> SignIn; signed in without a To Do Dash profile -> Onboarding
+// (email accounts) or KidSetup (kid devices, which hold an anonymous session);
 // otherwise Home. The shared Supabase project means a signed-in person may
 // exist in auth without belonging to this app, so the profile row decides.
 export default function App() {
@@ -27,8 +29,8 @@ export default function App() {
     setLoadError('')
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, family_id, display_name, role')
-      .eq('id', session.user.id)
+      .select('id, family_id, display_name, role, is_kid, hide_buy_links')
+      .eq('user_id', session.user.id)
       .maybeSingle()
     if (error) setLoadError(error.message)
     else setProfile(data)
@@ -52,7 +54,11 @@ export default function App() {
     )
   }
   if (profile === undefined) return <Shell><p className="muted">Loading…</p></Shell>
-  if (profile === null) return <Shell><Onboarding onDone={loadProfile} email={session.user.email} /></Shell>
+  if (profile === null) {
+    return session.user.is_anonymous
+      ? <Shell><KidSetup onDone={loadProfile} /></Shell>
+      : <Shell><Onboarding onDone={loadProfile} email={session.user.email} /></Shell>
+  }
   return <Shell><Home profile={profile} /></Shell>
 }
 

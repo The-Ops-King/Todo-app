@@ -19,7 +19,8 @@ Status: draft for approval. Nothing below is built yet.
 | Adult sign in | 6 digit code by email, sent through Resend as Supabase's SMTP. |
 | Notifications | Web push only. One daily summary per person at a time they pick. No email reminders, no SMS. |
 | Invites | Invite links, shared however you like (text, AirDrop). The app never sends email. |
-| Kids | Username + PIN login created by an admin. No email needed. |
+| Kids | Created by an admin with a first name only. A one-time setup code links the kid's phone, which then stays signed in with no PIN or password. |
+| Buy links | Never shown to kid accounts. Shown to adults unless an admin hides them for that person. |
 | Families | One family per person. |
 | Roles | Admin and Member. |
 | Affiliate links | Amazon, in the app only. Tag is a placeholder until you have one. |
@@ -106,7 +107,8 @@ subtask is checked, or when the responsible person checks the whole task off.
 | Action | Admin | Member |
 |---|---|---|
 | Invite, remove members, change roles | Yes | No |
-| Create kid logins, reset kid PINs | Yes | No |
+| Add kids, make kid setup codes | Yes | No |
+| Hide buy links for a person | Yes | No |
 | Create, edit, delete family tasks | Yes | No |
 | Complete a family occurrence | Any | Only if responsible |
 | Hand back an occurrence | Yes | Only if responsible |
@@ -115,7 +117,8 @@ subtask is checked, or when the responsible person checks the whole task off.
 | See someone else's personal tasks | No | No |
 
 The family creator is the first admin. A family must always have at least one
-admin, so the database refuses a change that would leave none.
+admin, so the database refuses a change that would leave none. Kid accounts
+are always members and can never be made admins.
 
 These rules are enforced in Postgres through row level security and
 `security definer` functions, never only in the React code. The browser can
@@ -138,7 +141,7 @@ One accidental tap should never push the oil change out 6 months.
 
 **Adults** sign in with a 6 digit code emailed through Resend, not a clickable magic link. On iOS a link in an email opens in Safari, and Safari and the installed Home Screen app do not share a login, so a magic link would log you into the wrong one. Typing a code into the app avoids that.
 
-**Kids.** An admin creates the kid: display name, username, PIN (6 digits minimum). Under the hood the kid is a normal Supabase user with a placeholder email on a domain we control that never receives mail. The login screen takes username + PIN, and an Edge Function maps the username to that account. Admins reset kid PINs. A 4 digit PIN is too easy to guess, so 6 is the minimum.
+**Kids.** An admin adds a kid by first name. That is all the app stores about a kid: no email, phone, birthday, last name or photo. The admin gets an 8 character setup code (15 minutes, single use). On the kid's phone, "Setting up a kid's phone?" starts an anonymous Supabase session and the code links it to the kid. The phone then opens straight to the kid's list and never signs out. A new phone gets a new code, and the kid's chores and history move with them; the old phone loses access. Anonymous sessions can never create a family or accept an adult invite. Profiles have their own id and point at whichever login currently holds them, which is what lets a kid move between devices.
 
 **Invite links.** Admin creates one, chooses the role, and it is single use and expires in 7 days. Only a hash of the token is stored.
 
@@ -146,7 +149,7 @@ One accidental tap should never push the oil change out 6 months.
 1. Sign in.
 2. Your name.
 3. Create your family (name; time zone detected).
-4. Add people: invite adults by link, create kid logins.
+4. Add people: invite adults by link, add kids and set up their phones with a code.
 5. Pick presets. Each preset shows all its tasks checked. Uncheck what does not apply. For each remaining task: "When did you last do this?" with a date or "Not sure". "Not sure" puts it in Upcoming, due in 7 days.
 6. Assign family tasks (defaults to you).
 7. Install to Home Screen, then allow notifications, then pick summary time. iOS only allows web push after install, so the order matters.
@@ -183,8 +186,9 @@ One accidental tap should never push the oil change out 6 months.
 
 ```
 families        id, name, time_zone, created_by, created_at
-profiles        id (= auth user), family_id, display_name, role (admin|member),
-                username (kids only, unique), is_kid, summary_time,
+profiles        id, family_id, display_name, role (admin|member),
+                user_id (current login, null for a kid between phones),
+                is_kid, hide_buy_links, summary_time,
                 summary_enabled, created_at
 invites         id, family_id, token_hash, role, created_by, expires_at,
                 used_by, used_at, revoked_at
