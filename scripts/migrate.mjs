@@ -37,6 +37,20 @@ if (!/^postgres(ql)?:$/.test(url.protocol)) {
   process.exit(1)
 }
 url.searchParams.delete('sslmode')
+// Shape checks on the password. They report which mistake it is, never the value.
+const pw = decodeURIComponent(url.password)
+if (!pw) {
+  console.error('[migrate] SUPABASE_DB_URL has no password in it.')
+  process.exit(1)
+}
+if (/YOUR-PASSWORD/i.test(pw) || /^\[.*\]$/.test(pw)) {
+  console.error('[migrate] SUPABASE_DB_URL still has the [YOUR-PASSWORD] placeholder or its brackets.')
+  process.exit(1)
+}
+if (/%[0-9a-f]{2}/i.test(pw)) {
+  console.error('[migrate] The password is encoded twice (it still contains %xx after decoding). Encode it once.')
+  process.exit(1)
+}
 if (url.port === '6543') {
   console.error('[migrate] SUPABASE_DB_URL is the Transaction pooler (6543). Use the Session pooler string (port 5432).')
   process.exit(1)
