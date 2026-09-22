@@ -36,6 +36,13 @@ if (url.port === '6543') {
   console.error('[migrate] SUPABASE_DB_URL is the Transaction pooler (6543). Use the Session pooler string (port 5432).')
   process.exit(1)
 }
+console.log(`[migrate] target ${url.hostname}:${url.port || '5432'} as ${decodeURIComponent(url.username)}`)
+if (/^db\.[a-z0-9]+\.supabase\.co$/.test(url.hostname)) {
+  console.error('[migrate] SUPABASE_DB_URL is the Direct connection, which is IPv6 only and unreachable from Vercel builds.')
+  console.error('[migrate] Use Supabase > Connect > Session pooler instead (host ends in pooler.supabase.com, port 5432).')
+  process.exit(1)
+}
+
 const client = new pg.Client({
   connectionString: url.toString(),
   ssl: { ca: await readFile(join(root, 'certs/supabase-prod-ca-2021.crt'), 'utf8'), rejectUnauthorized: true },
@@ -44,7 +51,7 @@ const client = new pg.Client({
 
 try {
   await client.connect()
-  console.log(`[migrate] connected to ${url.hostname}`)
+  console.log('[migrate] connected')
   await applyMigrations(client, join(root, 'supabase/migrations'))
 
   const { rows: cfg } = await client.query(
