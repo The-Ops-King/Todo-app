@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { errorText, supabase } from '../lib/supabase.js'
-import { clearInvite, pendingInvite } from '../lib/invite.js'
+import { clearInvite, parseInvite, pendingInvite } from '../lib/invite.js'
 
 export default function Onboarding({ onDone, email }) {
-  const invite = pendingInvite()
+  const [pasted, setPasted] = useState('')
+  const invite = pendingInvite() || parseInvite(pasted)
   const [name, setName] = useState('')
   const [familyName, setFamilyName] = useState('')
   const [busy, setBusy] = useState(false)
@@ -37,9 +38,16 @@ export default function Onboarding({ onDone, email }) {
         <input required maxLength={40} autoComplete="given-name"
           value={name} onChange={(e) => setName(e.target.value)} />
       </label>
+      {!joining && !pendingInvite() && (
+        <label>
+          Have an invite link? Paste it here
+          <input autoComplete="off" spellCheck={false} placeholder="https://todo.jtylerray.com/?invite=…"
+            value={pasted} onChange={(e) => setPasted(e.target.value)} />
+        </label>
+      )}
       {!joining && (
         <label>
-          Family name
+          Or name your new family
           <input required maxLength={80} placeholder="The Rays"
             value={familyName} onChange={(e) => setFamilyName(e.target.value)} />
         </label>
@@ -48,7 +56,7 @@ export default function Onboarding({ onDone, email }) {
       <button disabled={busy}>{busy ? 'Saving…' : joining ? 'Join' : 'Create family'}</button>
       <div className="row">
         {joining && (
-          <button type="button" className="link" onClick={() => { setIgnoreInvite(true); setError('') }}>
+          <button type="button" className="link" onClick={() => { setIgnoreInvite(true); setPasted(''); setError('') }}>
             Start a new family instead
           </button>
         )}

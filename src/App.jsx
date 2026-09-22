@@ -4,6 +4,8 @@ import SignIn from './screens/SignIn.jsx'
 import Onboarding from './screens/Onboarding.jsx'
 import Home from './screens/Home.jsx'
 import KidSetup from './screens/KidSetup.jsx'
+import InstallGuide from './screens/InstallGuide.jsx'
+import { choseSafari, needsInstallFirst } from './lib/platform.js'
 
 // signed out -> SignIn; signed in without a To Do Dash profile -> Onboarding
 // (email accounts) or KidSetup (kid devices, which hold an anonymous session);
@@ -13,6 +15,7 @@ export default function App() {
   const [session, setSession] = useState(undefined)
   const [profile, setProfile] = useState(undefined)
   const [loadError, setLoadError] = useState('')
+  const [inSafari, setInSafari] = useState(choseSafari())
 
   useEffect(() => {
     if (!configured) return
@@ -44,7 +47,12 @@ export default function App() {
     return <Shell><p className="error">This build is missing its Supabase settings.</p></Shell>
   }
   if (session === undefined) return <Shell><p className="muted">Loading…</p></Shell>
-  if (!session) return <Shell><SignIn /></Shell>
+  if (!session) {
+    if (needsInstallFirst() && !inSafari) {
+      return <Shell><InstallGuide onContinueInSafari={() => setInSafari(true)} /></Shell>
+    }
+    return <Shell><SignIn /></Shell>
+  }
   if (loadError) {
     return (
       <Shell>

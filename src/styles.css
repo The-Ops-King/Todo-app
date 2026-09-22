@@ -132,3 +132,18 @@ button.link {
   letter-spacing: 0.12em;
   text-align: center;
 }
+
+button.secondary { background: none; color: var(--accent); border: 1px solid var(--accent); }
+
+.steps { margin: 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 14px; }
+.steps li { counter-increment: step; display: grid; grid-template-columns: 28px 1fr; gap: 8px 10px; align-items: start; }
+.steps li::before {
+  content: counter(step);
+  grid-row: span 2;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-text);
+  display: grid; place-items: center; font-weight: 700; font-size: 0.9rem;
+}
+.steps li > button { grid-column: 2; }
+.small { font-size: 0.85rem; }
+.inline-icon { width: 1.15em; height: 1.15em; vertical-align: -0.2em; color: #0a84ff; }

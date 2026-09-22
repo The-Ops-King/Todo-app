@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { errorText, supabase } from '../lib/supabase.js'
+import { canPromptInstall, isStandalone, needsInstallFirst, onInstallAvailability, promptInstall } from '../lib/platform.js'
 
 const RESEND_AFTER = 60 // seconds; Supabase refuses a second code sooner than this
 
@@ -10,6 +11,9 @@ export default function SignIn() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [wait, setWait] = useState(0)
+  const [installable, setInstallable] = useState(canPromptInstall())
+
+  useEffect(() => onInstallAvailability(setInstallable), [])
 
   useEffect(() => {
     if (wait <= 0) return
@@ -71,9 +75,15 @@ export default function SignIn() {
         </label>
         {error && <p className="error">{error}</p>}
         <button disabled={busy}>{busy ? 'Sending…' : 'Email me a code'}</button>
-        <button type="button" className="link" disabled={busy} onClick={startKidSetup}>
-          Setting up a kid's phone?
-        </button>
+        {/* In Safari on iPhone a kid link would land in Safari, not the Home Screen app. */}
+        {!needsInstallFirst() && (
+          <button type="button" className="link" disabled={busy} onClick={startKidSetup}>
+            Setting up a kid's phone?
+          </button>
+        )}
+        {installable && !isStandalone() && (
+          <button type="button" className="secondary" onClick={promptInstall}>Install the app</button>
+        )}
       </form>
     )
   }

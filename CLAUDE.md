@@ -41,6 +41,14 @@ changing a variable, deploy from a new commit so the build reads current values.
 root CA; the migration connection verifies against it rather than turning
 verification off.
 
+**On iPhone, Safari and the Home Screen app share nothing.** Sign-ins, kid
+links and pending invites made in Safari do not exist in the installed app. So
+in Safari on iOS the app shows the install guide before any sign-in, kid setup
+only exists inside the installed app, and invites can be pasted in onboarding.
+Anything new that stores state before install has to respect this. The
+manifest (`display: standalone`) is what makes Add to Home Screen produce an
+app rather than a bookmark.
+
 ## Layout
 
 ```

@@ -41,3 +41,11 @@ export function clearInvite() {
 export function inviteLink(token) {
   return `${window.location.origin}/?invite=${token}`
 }
+
+// Accepts a pasted invite link or the bare token.
+export function parseInvite(text) {
+  const t = (text || '').trim()
+  const fromLink = t.match(/[?&]invite=([0-9a-f]{64})/i)
+  if (fromLink) return fromLink[1].toLowerCase()
+  return /^[0-9a-f]{64}$/i.test(t) ? t.toLowerCase() : null
+}
