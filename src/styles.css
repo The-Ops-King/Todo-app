@@ -309,6 +309,7 @@ textarea { font: inherit; padding: 12px 14px; border: 1px solid var(--line); bor
 .when-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .chip.big { padding: 13px 12px; border-radius: 12px; font-weight: 600; }
 .chip.big.quiet { grid-column: 1 / -1; color: var(--muted); }
+.chip.big.danger { color: var(--error); border-color: color-mix(in srgb, var(--error) 45%, var(--line)); }
 .when-date { display: grid; gap: 10px; }
 .inline.spread { justify-content: space-between; }
 

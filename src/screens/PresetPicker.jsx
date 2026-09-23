@@ -91,10 +91,30 @@ export default function PresetPicker({ profile, onClose, onDone, firstRun }) {
   const stepNo = STEPS.indexOf(step) + 1
   const names = Object.fromEntries(members.map((m) => [m.id, m.display_name]))
 
-  function remove(t) {
+  // index is where the task sat in the "when" step, so undo can return there.
+  function remove(t, index = null) {
     setRemoved((r) => [...r, t.id])
-    setUndo(t)
+    setUndo({ task: t, index })
   }
+  function undoRemove() {
+    setRemoved((r) => r.filter((x) => x !== undo.task.id))
+    if (undo.index !== null) {
+      setWhenIndex(undo.index)
+      setStep('when')
+    }
+    setUndo(null)
+  }
+  // The next task slides into the removed one's place, so the index stays.
+  function removeWhen() {
+    remove(toAsk[whenIndex], whenIndex)
+    if (whenIndex + 1 >= toAsk.length) setStep('who')
+  }
+  const undoToast = undo && (
+    <div className="toast in-sheet" role="status">
+      <span>Removed {undo.task.title}</span>
+      <button className="link" onClick={undoRemove}>Undo</button>
+    </div>
+  )
   useEffect(() => {
     if (!undo) return
     const timer = setTimeout(() => setUndo(null), 5000)
@@ -214,12 +234,6 @@ export default function PresetPicker({ profile, onClose, onDone, firstRun }) {
                 </ul>
               </details>
             )}
-            {undo && (
-              <div className="toast in-sheet" role="status">
-                <span>Removed {undo.title}</span>
-                <button className="link" onClick={() => { setRemoved(removed.filter((x) => x !== undo.id)); setUndo(null) }}>Undo</button>
-              </div>
-            )}
             <div className="sticky-actions">
               <button disabled={kept.length === 0} onClick={goToWhen}>Next ({kept.length} tasks)</button>
               <button className="link" onClick={() => setStep('pick')}>Back</button>
@@ -232,6 +246,7 @@ export default function PresetPicker({ profile, onClose, onDone, firstRun }) {
             today={today} current={lastDone[toAsk[whenIndex].id]}
             onAnswer={answer}
             onBack={() => (whenIndex ? setWhenIndex(whenIndex - 1) : setStep('review'))}
+            onRemove={removeWhen}
             onSkipRest={() => setStep('who')} />
         )}
 
@@ -295,6 +310,7 @@ export default function PresetPicker({ profile, onClose, onDone, firstRun }) {
           </>
         )}
         {step === 'pick' && error && <p className="error">{error}</p>}
+        {step !== 'pick' && undoToast}
       </div>
     </div>
   )
@@ -358,7 +374,7 @@ function SwipeRow({ task, color, onRemove }) {
   )
 }
 
-function WhenCard({ task, index, total, today, current, onAnswer, onBack, onSkipRest }) {
+function WhenCard({ task, index, total, today, current, onAnswer, onRemove, onBack, onSkipRest }) {
   const [picking, setPicking] = useState(false)
   const [date, setDate] = useState(current || '')
   const { color, icon } = presetStyle(task.preset)
@@ -379,6 +395,7 @@ function WhenCard({ task, index, total, today, current, onAnswer, onBack, onSkip
             <button key={label} type="button" className="chip big" onClick={() => onAnswer(addDays(today, -days))}>{label}</button>
           ))}
           <button type="button" className="chip big" onClick={() => setPicking(true)}>Pick a date</button>
+          <button type="button" className="chip big danger" onClick={onRemove}>Remove this task</button>
           <button type="button" className="chip big quiet" onClick={() => onAnswer(null)}>Never, or not sure</button>
         </div>
       ) : (
