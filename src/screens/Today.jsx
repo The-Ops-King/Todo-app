@@ -4,6 +4,7 @@ import { addDays, dueLabel, todayIn } from '../lib/dates.js'
 import { describeSchedule } from '../lib/schedule.js'
 import TaskSheet from './TaskSheet.jsx'
 import TaskForm from './TaskForm.jsx'
+import { Avatar, PERSON_FIELDS } from '../lib/avatar.jsx'
 
 const TASK_FIELDS = `id, title, notes, scope, owner_id, assign_mode, lead_days, buy_query, custom_link,
   schedule_kind, interval_unit, interval_count, cal_weekdays, cal_month_days, cal_months, active_months, miss_policy,
@@ -28,7 +29,7 @@ export default function Today({ profile, onAddPresets }) {
     await supabase.rpc('rollover')
     const [f, m, o] = await Promise.all([
       supabase.from('families').select('name, time_zone').single(),
-      supabase.from('profiles').select('id, display_name, is_kid').order('created_at'),
+      supabase.from('profiles').select(PERSON_FIELDS).order('created_at'),
       supabase.from('occurrences')
         .select(`id, due_on, responsible_id, task:tasks!inner (${TASK_FIELDS})`)
         .eq('status', 'open')
@@ -123,7 +124,7 @@ export default function Today({ profile, onAddPresets }) {
 
   const empty = groups && !groups.overdue.length && !groups.today.length && !groups.upcoming.length
   const row = (o) => (
-    <Row key={o.id} occ={o} today={today} names={names} me={profile.id}
+    <Row key={o.id} occ={o} today={today} names={names} me={profile.id} members={scope === 'everyone' ? members : null}
       checks={checks} canComplete={canWork(o)} onComplete={() => complete(o)} onOpen={() => setSelected(o)} />
   )
 
@@ -196,7 +197,7 @@ function Later({ children }) {
   )
 }
 
-function Row({ occ, today, names, me, checks, canComplete, onComplete, onOpen }) {
+function Row({ occ, today, names, me, members, checks, canComplete, onComplete, onOpen }) {
   const t = occ.task
   const subs = t.subtasks.length
   const done = checks.filter((c) => c.occurrence_id === occ.id).length
@@ -206,6 +207,10 @@ function Row({ occ, today, names, me, checks, canComplete, onComplete, onOpen })
       ? t.task_assignees.map((a) => names[a.profile_id]).filter(Boolean).join(' or ')
       : occ.responsible_id === me ? 'You' : names[occ.responsible_id]
   const overdue = occ.due_on < today
+  // Everyone view: who it's on, by icon. A pool shows each person who can do it.
+  const faceIds = t.scope === 'personal' ? [t.owner_id]
+    : t.assign_mode === 'pool' ? t.task_assignees.map((a) => a.profile_id) : [occ.responsible_id]
+  const faces = members ? faceIds.map((id) => members.find((m) => m.id === id)).filter(Boolean) : []
   return (
     <li className="row">
       {canComplete
@@ -220,6 +225,12 @@ function Row({ occ, today, names, me, checks, canComplete, onComplete, onOpen })
           <span>{describeSchedule(t)}</span>
         </span>
       </button>
+      {faces.length > 0 && (
+        <button className="faces" aria-label={`${who || 'You'}. Open ${t.title}`} onClick={onOpen}>
+          {faces.slice(0, 3).map((m) => <Avatar key={m.id} person={m} members={members} size={30} />)}
+          {faces.length > 3 && <span className="faces-more">+{faces.length - 3}</span>}
+        </button>
+      )}
     </li>
   )
 }

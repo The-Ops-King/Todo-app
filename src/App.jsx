@@ -10,6 +10,7 @@ import KidSetup from './screens/KidSetup.jsx'
 import InstallGuide from './screens/InstallGuide.jsx'
 import OpenInBrowser from './screens/OpenInBrowser.jsx'
 import { choseSafari, isInAppBrowser, needsInstallFirst } from './lib/platform.js'
+import { FamilyIcon } from './lib/avatar.jsx'
 
 // signed out -> SignIn; signed in without a To Do Dash profile -> Onboarding
 // (email accounts) or KidSetup (kid devices, which hold an anonymous session);
@@ -86,6 +87,16 @@ function Main({ profile, firstRun }) {
   const [assigning, setAssigning] = useState(null)
   const [newcomer, setNewcomer] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [family, setFamily] = useState(null)
+
+  const loadFamily = useCallback(async () => {
+    const { data } = await supabase.from('families').select('name, icon_emoji, icon_color').single()
+    if (data) setFamily(data)
+  }, [])
+
+  useEffect(() => {
+    loadFamily()
+  }, [loadFamily])
 
   const checkNewcomers = useCallback(async () => {
     if (!isAdmin) return
@@ -112,6 +123,10 @@ function Main({ profile, firstRun }) {
 
   return (
     <div className="shell with-tabs">
+      <header className="brand app-head">
+        {family && <FamilyIcon family={family} size={26} />}
+        <span>To Do Dash</span>
+      </header>
       {newcomer && !assigning && !picking && (
         <div className="banner">
           <span><strong>{newcomer.display_name}</strong> joined. Give them some tasks?</span>
@@ -124,7 +139,7 @@ function Main({ profile, firstRun }) {
       <main>
         {tab === 'today'
           ? <Today key={reloadKey} profile={profile} onAddPresets={openPresets} />
-          : <Home profile={profile} onAddPresets={openPresets} onAssign={openAssign} />}
+          : <Home profile={profile} onAddPresets={openPresets} onAssign={openAssign} onFamilyChanged={loadFamily} />}
       </main>
       {picking && (
         <PresetPicker profile={profile} firstRun={firstRun}

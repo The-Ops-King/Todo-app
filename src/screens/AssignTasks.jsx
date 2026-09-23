@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { errorText, supabase } from '../lib/supabase.js'
 import { describeSchedule } from '../lib/schedule.js'
-import { Avatar, Icon, personColor, presetStyle } from '../lib/presetStyle.jsx'
+import { Icon, presetStyle } from '../lib/presetStyle.jsx'
+import { Avatar, PERSON_FIELDS } from '../lib/avatar.jsx'
 
 // "Which tasks go to Sally?" Lists the family's single-owner tasks grouped by
 // preset; tap to pick, then hand them all over at once. Pooled and rotating
@@ -20,7 +21,7 @@ export default function AssignTasks({ person, onClose, onDone }) {
           cal_month_days, cal_months, active_months, task_assignees (profile_id),
           preset_task:preset_tasks (preset:presets (id, slug, name, position))`)
         .eq('scope', 'family').eq('assign_mode', 'single').order('title'),
-      supabase.from('profiles').select('id, display_name').order('created_at'),
+      supabase.from('profiles').select(PERSON_FIELDS).order('created_at'),
     ]).then(([t, m]) => {
       if (t.error || m.error) return setError(errorText(t.error || m.error))
       setTasks(t.data)
@@ -39,7 +40,6 @@ export default function AssignTasks({ person, onClose, onDone }) {
     return [...out.values()].sort((a, b) => (a.preset?.position ?? 999) - (b.preset?.position ?? 999))
   }, [tasks])
 
-  const names = Object.fromEntries(members.map((m) => [m.id, m.display_name]))
   const toggle = (id) => {
     const next = new Set(picked)
     if (next.has(id)) next.delete(id)
@@ -86,8 +86,8 @@ export default function AssignTasks({ person, onClose, onDone }) {
                           <span className="pill">{describeSchedule(t)}</span>
                         </span>
                         {on
-                          ? <Avatar name={person.display_name} color={personColor(members, person.id)} />
-                          : <Avatar name={names[owner]} color={personColor(members, owner)} />}
+                          ? <Avatar person={members.find((m) => m.id === person.id) || person} members={members} />
+                          : <Avatar person={members.find((m) => m.id === owner)} members={members} />}
                       </button>
                     </li>
                   )

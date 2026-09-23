@@ -2,18 +2,22 @@ import { useCallback, useEffect, useState } from 'react'
 import { errorText, supabase } from '../lib/supabase.js'
 import { inviteLink } from '../lib/invite.js'
 import { formatSetupCode } from '../lib/people.js'
+import { Avatar, FamilyIcon, PERSON_FIELDS } from '../lib/avatar.jsx'
+import IconEditor from './IconEditor.jsx'
+import { Segmented } from '../components/Choice.jsx'
 
 // The Family tab: members, kids, invites, buy link settings.
-export default function Home({ profile, onAddPresets, onAssign }) {
+export default function Home({ profile, onAddPresets, onAssign, onFamilyChanged }) {
   const [family, setFamily] = useState(null)
   const [members, setMembers] = useState([])
   const [error, setError] = useState('')
+  const [editing, setEditing] = useState(null)
   const isAdmin = profile.role === 'admin'
 
   const load = useCallback(async () => {
     const [f, m] = await Promise.all([
-      supabase.from('families').select('name').single(),
-      supabase.from('profiles').select('id, display_name, role, is_kid, hide_buy_links').order('created_at'),
+      supabase.from('families').select('name, icon_emoji, icon_color').single(),
+      supabase.from('profiles').select(`${PERSON_FIELDS}, hide_buy_links`).order('created_at'),
     ])
     if (f.error || m.error) return setError(errorText(f.error || m.error))
     setFamily(f.data)
@@ -27,12 +31,21 @@ export default function Home({ profile, onAddPresets, onAssign }) {
   return (
     <div className="stack">
       <section className="card">
-        <h1>{family ? family.name : '…'}</h1>
-        <p className="muted">Signed in as {profile.display_name}.</p>
+        <div className="family-head">
+          {family && <FamilyIcon family={family} size={44} />}
+          <div>
+            <h1>{family ? family.name : '…'}</h1>
+            <p className="muted">Signed in as {profile.display_name}.</p>
+          </div>
+        </div>
+        {isAdmin && family && (
+          <button className="link" onClick={() => setEditing({ family })}>Change family icon</button>
+        )}
         {error && <p className="error">{error}</p>}
         <ul className="members">
           {members.map((m) => (
-            <Member key={m.id} member={m} self={m.id === profile.id} isAdmin={isAdmin} onChange={load} onAssign={onAssign} />
+            <Member key={m.id} member={m} members={members} self={m.id === profile.id} isAdmin={isAdmin}
+              onChange={load} onAssign={onAssign} onEditIcon={() => setEditing({ person: m })} />
           ))}
         </ul>
       </section>
@@ -47,11 +60,16 @@ export default function Home({ profile, onAddPresets, onAssign }) {
       {isAdmin && <Invite />}
       {/* Signing out on a kid's phone would unlink it; only a new setup code brings it back. */}
       {!profile.is_kid && <button className="link" onClick={() => supabase.auth.signOut()}>Sign out</button>}
+      {editing && (
+        <IconEditor {...editing} members={members} self={editing.person?.id === profile.id}
+          onClose={() => { setEditing(null); load() }}
+          onSaved={() => { setEditing(null); load(); if (editing.family) onFamilyChanged?.() }} />
+      )}
     </div>
   )
 }
 
-function Member({ member, self, isAdmin, onChange, onAssign }) {
+function Member({ member, members, self, isAdmin, onChange, onAssign, onEditIcon }) {
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -80,10 +98,14 @@ function Member({ member, self, isAdmin, onChange, onAssign }) {
   return (
     <li className="member">
       <div className="member-row">
+        <Avatar person={member} members={members} size={36} />
         <span>{member.display_name}{self && ' (you)'}</span>
         {member.role === 'admin' && <span className="tag">admin</span>}
         {member.is_kid && <span className="tag">kid</span>}
       </div>
+      {(self || (isAdmin && member.is_kid)) && (
+        <button className="link" onClick={onEditIcon}>{self ? 'Change your icon' : 'Change icon'}</button>
+      )}
       {onAssign && !self && (
         <button className="link" onClick={() => onAssign(member)}>Assign tasks</button>
       )}
@@ -194,13 +216,8 @@ function Invite() {
     <section className="card">
       <h2>Invite an adult</h2>
       <p className="muted">They sign in with their own email. Each link works once and expires in 7 days.</p>
-      <label>
-        They join as
-        <select value={role} onChange={(e) => { setRole(e.target.value); setLink('') }}>
-          <option value="member">Member</option>
-          <option value="admin">Admin</option>
-        </select>
-      </label>
+      <Segmented label="They join as" value={role} options={[['member', 'Member'], ['admin', 'Admin']]}
+        onChange={(v) => { setRole(v); setLink('') }} />
       {!link && <button disabled={busy} onClick={create}>{busy ? 'Creating…' : 'Create invite link'}</button>}
       {link && (
         <>

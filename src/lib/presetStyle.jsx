@@ -1,4 +1,4 @@
-// A color and a simple line icon per preset, and a color per family member.
+// A color and a simple line icon per preset.
 // Colors are chosen to sit next to the app green without fighting it, and
 // each has enough contrast for white text.
 
@@ -58,21 +58,5 @@ export function Icon({ name, size = 22, color = 'currentColor' }) {
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d={ICONS[name] || ICONS.list} />
     </svg>
-  )
-}
-
-const PEOPLE = ['#2f6f4e', '#3a6ea5', '#b0643a', '#7a5aa6', '#a0474f', '#3f8a8a', '#8a7a2e']
-
-// Members arrive in created order, so a person keeps their color.
-export function personColor(members, id) {
-  const i = members.findIndex((m) => m.id === id)
-  return PEOPLE[(i < 0 ? 0 : i) % PEOPLE.length]
-}
-
-export function Avatar({ name, color, size = 28 }) {
-  return (
-    <span className="avatar" style={{ background: color, width: size, height: size, fontSize: size * 0.45 }}>
-      {(name || '?').trim().charAt(0).toUpperCase()}
-    </span>
   )
 }

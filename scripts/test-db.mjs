@@ -755,6 +755,69 @@ await as(mom, ({ q }) => q("select todo.set_role($1, 'admin')", [P[dad]]))
   check('others fall back to the batch assignee', ownerOf(dog[1].id) === P[dad] && ownerOf(dog[2].id) === P[dad])
 }
 
+// --- icons and photos ------------------------------------------------------------
+
+{
+  const sally = (await superuser("select id, user_id from todo.profiles where display_name = 'Sally'"))[0]
+  const icon = (pid) => superuser('select icon_emoji, icon_color, photo_version from todo.profiles where id = $1', [pid]).then((r) => r[0])
+
+  await as(kid1, ({ q }) => q("select todo.set_icon($1, '🦊', '#3a6ea5')", [P[kid1]]))
+  const own = await icon(P[kid1])
+  check('anyone sets their own icon', own.icon_emoji === '🦊' && own.icon_color === '#3a6ea5')
+  await fails('members cannot change someone else', kid1,
+    ({ q }) => q("select todo.set_icon($1, '🦊', null)", [P[dad]]), /only change your own/)
+  await fails('admins cannot change another adult', dad,
+    ({ q }) => q("select todo.set_icon($1, '🦊', null)", [P[mom]]), /only change your own/)
+  await as(dad, ({ q }) => q("select todo.set_icon($1, '🐢', '#2f6f4e')", [sally.id]))
+  check('admins change a kid\'s icon', (await icon(sally.id)).icon_emoji === '🐢')
+  await as(sally.user_id, ({ q }) => q("select todo.set_icon($1, '🦄', '#7a5aa6')", [sally.id]))
+  check('kids change their own icon', (await icon(sally.id)).icon_emoji === '🦄')
+  await fails('another family cannot change your icon', stranger,
+    ({ q }) => q("select todo.set_icon($1, '🦊', null)", [P[kid1]]), /member not found/)
+  await fails('text is not an icon', kid1,
+    ({ q }) => q("select todo.set_icon($1, 'lol', null)", [P[kid1]]), /not an emoji/)
+  await fails('markup is not an icon', kid1,
+    ({ q }) => q("select todo.set_icon($1, '<b>', null)", [P[kid1]]), /not an emoji/)
+  await fails('colors are hex', kid1,
+    ({ q }) => q("select todo.set_icon($1, '🦊', 'red')", [P[kid1]]), /not a color/)
+  await fails('icons cannot be written directly', kid1,
+    ({ q }) => q("update todo.profiles set icon_emoji = '🦊' where id = $1", [P[kid1]]), /permission denied/)
+
+  const webp = Buffer.concat([Buffer.from('RIFF\0\0\0\0WEBPVP8 '), Buffer.alloc(200, 7)]).toString('base64')
+  const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 7)]).toString('base64')
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.alloc(200, 7)]).toString('base64')
+  const v1 = (await as(mom, ({ one }) => one('select todo.set_photo($1) as v', [webp]))).v
+  const v2 = (await as(mom, ({ one }) => one('select todo.set_photo($1) as v', [jpeg]))).v
+  check('a new photo bumps the version', v1 === 1 && v2 === 2 && (await icon(P[mom])).photo_version === 2)
+  await fails('kids cannot upload photos', sally.user_id,
+    ({ q }) => q('select todo.set_photo($1)', [jpeg]), /kids use an emoji/)
+  await fails('only WebP and JPEG', mom, ({ q }) => q('select todo.set_photo($1)', [png]), /WebP or JPEG/)
+  await fails('photos have a size limit', mom,
+    ({ q }) => q('select todo.set_photo($1)', [Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(100001)]).toString('base64')]),
+    /too large/)
+  await fails('garbage is refused', mom, ({ q }) => q("select todo.set_photo('not base64!!')"), /could not be read/)
+
+  const seen = await as(sally.user_id, ({ rows }) => rows('select profile_id, version, data from todo.family_photos()'))
+  check('the family sees the photo', seen.length === 1 && seen[0].profile_id === P[mom] && seen[0].version === 2 && seen[0].data === jpeg)
+  const outsider = await as(stranger, ({ rows }) => rows('select * from todo.family_photos()'))
+  check('other families do not', outsider.length === 0)
+  await fails('photos cannot be written directly', mom,
+    ({ q }) => q('delete from todo.photos'), /permission denied/)
+  await as(mom, ({ q }) => q('select todo.clear_photo()'))
+  const cleared = await superuser('select count(*)::int as n from todo.photos where profile_id = $1', [P[mom]])
+  check('clearing removes the photo', cleared[0].n === 0 && (await icon(P[mom])).photo_version === null)
+
+  await fails('members cannot change the family icon', kid1,
+    ({ q }) => q("select todo.set_family_icon('🏡', '#2f6f4e')"), /only admins/)
+  await fails('kids cannot change the family icon', sally.user_id,
+    ({ q }) => q("select todo.set_family_icon('🏡', '#2f6f4e')"), /only admins/)
+  await as(mom, ({ q }) => q("select todo.set_family_icon('🏡', '#2f6f4e')"))
+  const fam = await as(kid1, ({ one }) => one('select icon_emoji, icon_color from todo.families'))
+  check('admins set the family icon', fam.icon_emoji === '🏡' && fam.icon_color === '#2f6f4e')
+  const other = await superuser('select icon_emoji from todo.families where id = $1', [strangerFamily])
+  check('only in their own family', other[0].icon_emoji === null)
+}
+
 // --- invariant: every live task has an open occurrence ------------------------
 
 {

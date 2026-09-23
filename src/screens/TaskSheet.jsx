@@ -3,6 +3,7 @@ import { errorText, supabase } from '../lib/supabase.js'
 import { dueLabel } from '../lib/dates.js'
 import { describeSchedule } from '../lib/schedule.js'
 import { buyLink, showsBuyLinks } from '../lib/people.js'
+import { PeoplePicker } from '../components/Choice.jsx'
 
 const MODE_TEXT = {
   pool: 'Anyone listed can do it',
@@ -91,15 +92,8 @@ export default function TaskSheet({ occ, profile, members, today, checks, canWor
 
         {canHandBack && (
           <div className="hand-back">
-            <label>
-              Hand it to someone else
-              <select value={handTo} onChange={(e) => setHandTo(e.target.value)}>
-                <option value="">Choose a person</option>
-                {members.filter((m) => m.id !== occ.responsible_id).map((m) => (
-                  <option key={m.id} value={m.id}>{m.display_name}</option>
-                ))}
-              </select>
-            </label>
+            <PeoplePicker label="Hand it to someone else" me={profile.id} everyone={members}
+              members={members.filter((m) => m.id !== occ.responsible_id)} value={handTo} onChange={setHandTo} />
             {handTo && <button className="secondary" disabled={busy} onClick={handBack}>Hand to {names[handTo]}</button>}
           </div>
         )}

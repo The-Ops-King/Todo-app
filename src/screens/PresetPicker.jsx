@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { errorText, supabase } from '../lib/supabase.js'
 import { describeSchedule } from '../lib/schedule.js'
 import { addDays, todayIn } from '../lib/dates.js'
-import { Avatar, Icon, personColor, presetStyle } from '../lib/presetStyle.jsx'
+import { Icon, presetStyle } from '../lib/presetStyle.jsx'
+import { Avatar, PERSON_FIELDS } from '../lib/avatar.jsx'
 
 // Four steps:
 //   1. pick     presets that fit the household
@@ -48,7 +49,7 @@ export default function PresetPicker({ profile, onClose, onDone, firstRun }) {
           preset_tasks (id, title, schedule_kind, interval_unit, interval_count, cal_weekdays, cal_month_days,
             cal_months, active_months, miss_policy, position)`)
         .order('position'),
-      supabase.from('profiles').select('id, display_name, is_kid').order('created_at'),
+      supabase.from('profiles').select(PERSON_FIELDS).order('created_at'),
       supabase.from('tasks').select('preset_task_id').not('preset_task_id', 'is', null),
     ]).then(([f, p, m, t]) => {
       const failed = f.error || p.error || m.error || t.error
@@ -257,7 +258,7 @@ export default function PresetPicker({ profile, onClose, onDone, firstRun }) {
             <div className="people">
               {members.map((m) => (
                 <button key={m.id} type="button" className="person" aria-pressed={person === m.id} onClick={() => setPerson(m.id)}>
-                  <Avatar name={m.display_name} color={personColor(members, m.id)} size={40} />
+                  <Avatar person={m} members={members} size={40} />
                   <span>{m.id === profile.id ? 'You' : m.display_name}</span>
                   <span className="muted small">{kept.filter((t) => ownerOf(t.id) === m.id).length}</span>
                 </button>
@@ -286,7 +287,7 @@ export default function PresetPicker({ profile, onClose, onDone, firstRun }) {
                               <span className="task-title">{t.title}</span>
                               <span className="pill">{describeSchedule(t)}</span>
                             </span>
-                            <Avatar name={names[owner]} color={personColor(members, owner)} />
+                            <Avatar person={members.find((m) => m.id === owner)} members={members} />
                           </button>
                         </li>
                       )

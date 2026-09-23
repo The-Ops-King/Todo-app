@@ -164,11 +164,25 @@ One accidental tap should never push the oil change out 6 months.
 - **Activity.** Hand backs, completions by others, reassignments.
 - **Settings.** Summary time (15 minute steps), notifications on/off, install help.
 
+## Icons
+
+- Every person has an emoji on a color. Until they pick one, it's their initial on a color set by join order.
+- Adults can use a photo instead. Kids cannot, so no picture of a child is stored.
+- Photos are cropped square and shrunk to 256px in the browser, then stored in `todo.photos` (not Supabase Storage, whose tables are shared with other apps). The database accepts only WebP or JPEG up to 100 KB.
+- You change your own icon. Admins can also change a kid's. Only admins change the family icon.
+- The family icon shows in the app header and on the Family tab, and is the badge on the daily summary push.
+- The Everyone view shows who each task is on by icon.
+
+## Controls
+
+No native dropdowns. A person is picked by tapping their icon. Two to four short options are a segmented control. Options that need a sentence are a radio list.
+
 ## Daily summary push
 
 - `pg_cron` runs every 15 minutes and calls one Edge Function through `pg_net`.
 - The function finds people whose summary time has passed in their family's time zone and who have not had today's summary yet.
 - It sends one push per device: "4 things today, 1 overdue."
+- The push uses the family icon as its badge.
 - A `summary_log (profile_id, local_date)` unique row makes it idempotent. A retry or overlapping run cannot double send.
 - The same run handles midnight rollover: skip-policy occurrences past due get recorded as skipped, and rotate-per-period tasks get their new period's occurrence.
 - A push endpoint that returns 404 or 410 is deleted. That is the browser telling us the subscription is gone.

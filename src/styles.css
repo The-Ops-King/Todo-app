@@ -333,3 +333,36 @@ textarea { font: inherit; padding: 12px 14px; border: 1px solid var(--line); bor
   display: grid; gap: 4px;
 }
 .empty { display: grid; gap: 10px; justify-items: center; text-align: center; padding: 24px 0; }
+
+/* --- icons --- */
+img.avatar { object-fit: cover; background: var(--line); }
+.app-head { display: flex; align-items: center; gap: 8px; }
+.family-head { display: flex; align-items: center; gap: 12px; }
+.faces { flex: none; display: flex; align-items: center; background: none; padding: 0; }
+.faces .avatar + .avatar { margin-left: -8px; box-shadow: 0 0 0 2px var(--card); }
+.faces-more { margin-left: 4px; font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+.icon-preview { display: grid; place-items: center; padding: 4px 0; }
+.icon-photo { justify-content: center; }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.swatch { width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 0; }
+.swatch[aria-checked='true'] { box-shadow: 0 0 0 3px var(--card), 0 0 0 5px var(--text); }
+.emoji-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; }
+.emoji { height: 44px; padding: 0; font-size: 1.5rem; line-height: 1; background: var(--bg); color: var(--text); border: 1.5px solid transparent; border-radius: 12px; }
+.emoji.letter { font-size: 1.1rem; font-weight: 700; }
+.emoji[aria-checked='true'] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
+
+/* --- choices (replacing selects) --- */
+.choice { display: grid; gap: 8px; }
+.choice-label { font-weight: 600; }
+.segmented button[aria-checked='true'] { background: var(--accent); color: var(--accent-text); }
+.option-list { display: grid; gap: 8px; }
+.option { display: flex; align-items: flex-start; gap: 12px; text-align: left; padding: 12px 14px; background: var(--card); color: var(--text);
+  border: 1.5px solid var(--line); border-radius: 12px; font-weight: 400; }
+.option[aria-checked='true'] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--card)); }
+.option-dot { flex: none; width: 20px; height: 20px; margin-top: 1px; border-radius: 50%; border: 2px solid var(--line); }
+.option[aria-checked='true'] .option-dot { border: 6px solid var(--accent); }
+.option-text { display: grid; gap: 2px; }
+.option-title { font-weight: 600; }
+.person { position: relative; }
+.person-order { position: absolute; top: 4px; right: 6px; min-width: 18px; height: 18px; border-radius: 9px; background: var(--accent);
+  color: var(--accent-text); font-size: 0.72rem; font-weight: 700; display: grid; place-items: center; }

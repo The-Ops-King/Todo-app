@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { errorText, supabase } from '../lib/supabase.js'
 import { MONTHS, WEEKDAYS, defaultLeadDays, describeSchedule } from '../lib/schedule.js'
 import { showsBuyLinks } from '../lib/people.js'
+import { OptionList, PeoplePicker, Segmented } from '../components/Choice.jsx'
 
 const QUICK = [
   ['Daily', 'day', 1], ['Weekly', 'week', 1], ['Monthly', 'month', 1],
@@ -142,21 +143,15 @@ export default function TaskForm({ profile, members, today, onClose, onSaved }) 
               <div className="inline">
                 <span>Every</span>
                 <input type="number" min={1} max={1000} inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value)} />
-                <select value={unit} onChange={(e) => setUnit(e.target.value)}>
-                  <option value="day">days</option>
-                  <option value="week">weeks</option>
-                  <option value="month">months</option>
-                  <option value="year">years</option>
-                </select>
               </div>
+              <Segmented value={unit} onChange={setUnit}
+                options={[['day', 'Days'], ['week', 'Weeks'], ['month', 'Months'], ['year', 'Years']]} />
               <p className="muted small">Counts from the day it's done. Done late, the next one moves back too.</p>
             </>
           ) : (
             <>
-              <select value={calMode} onChange={(e) => setCalMode(e.target.value)}>
-                <option value="weekdays">Days of the week</option>
-                <option value="monthday">A day of the month</option>
-              </select>
+              <Segmented value={calMode} onChange={setCalMode}
+                options={[['weekdays', 'Days of the week'], ['monthday', 'Day of the month']]} />
               {calMode === 'weekdays' ? (
                 <div className="chips">
                   {WEEKDAYS.map((d, i) => (
@@ -187,11 +182,8 @@ export default function TaskForm({ profile, members, today, onClose, onSaved }) 
 
         <fieldset>
           <legend>Starting</legend>
-          <select value={start} onChange={(e) => setStart(e.target.value)}>
-            <option value="first_due_on">First due on</option>
-            <option value="last_done_on">Last done on</option>
-            <option value="unsure">Not sure when it was last done</option>
-          </select>
+          <Segmented value={start} onChange={setStart}
+            options={[['first_due_on', 'First due'], ['last_done_on', 'Last done'], ['unsure', 'Not sure']]} />
           {start !== 'unsure'
             ? <input type="date" required value={startDate} max={start === 'last_done_on' ? today : undefined}
                 onChange={(e) => setStartDate(e.target.value)} />
@@ -201,20 +193,13 @@ export default function TaskForm({ profile, members, today, onClose, onSaved }) 
         {scope === 'family' && (
           <fieldset>
             <legend>Who does it</legend>
-            <div className="chips">
-              {members.map((m) => (
-                <button key={m.id} type="button" className="chip" aria-pressed={assignees.includes(m.id)}
-                  onClick={() => toggleIn(assignees, setAssignees, m.id)}>
-                  {assignees.includes(m.id) && assignees.length > 1 ? `${assignees.indexOf(m.id) + 1}. ` : ''}{m.display_name}
-                </button>
-              ))}
-            </div>
+            <PeoplePicker members={members} me={profile.id} multiple value={assignees} onChange={setAssignees} />
             {assignees.length > 1 && (
-              <select value={mode} onChange={(e) => setMode(e.target.value)}>
-                <option value="pool">Any of them can do it</option>
-                <option value="rotate_completion">Take turns, next person each time it's done</option>
-                <option value="rotate_period">Take turns, a new person each week</option>
-              </select>
+              <OptionList value={mode} onChange={setMode} options={[
+                ['pool', 'Any of them', 'Whoever gets to it first checks it off.'],
+                ['rotate_completion', 'Take turns', 'The next person in order each time it is done.'],
+                ['rotate_period', 'Take turns weekly', 'A new person each week, done or not.'],
+              ]} />
             )}
           </fieldset>
         )}
@@ -241,13 +226,10 @@ export default function TaskForm({ profile, members, today, onClose, onSaved }) 
         <button type="button" className="link" onClick={() => setMore(!more)}>{more ? 'Fewer options' : 'More options'}</button>
         {more && (
           <>
-            <label>
-              If it's missed
-              <select value={missPolicy} onChange={(e) => setMissPolicy(e.target.value)}>
-                <option value="carry">Keep it on the list until it's done</option>
-                <option value="skip">Skip it and move on to the next one</option>
-              </select>
-            </label>
+            <OptionList label="If it's missed" value={missPolicy} onChange={setMissPolicy} options={[
+              ['carry', 'Keep it on the list', "It stays until it's done."],
+              ['skip', 'Skip it', 'Move on to the next one.'],
+            ]} />
             <fieldset>
               <legend>Only in season (optional)</legend>
               <div className="chips">
