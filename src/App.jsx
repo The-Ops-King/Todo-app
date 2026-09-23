@@ -4,6 +4,7 @@ import SignIn from './screens/SignIn.jsx'
 import Onboarding from './screens/Onboarding.jsx'
 import Home from './screens/Home.jsx'
 import Today from './screens/Today.jsx'
+import PresetPicker from './screens/PresetPicker.jsx'
 import KidSetup from './screens/KidSetup.jsx'
 import InstallGuide from './screens/InstallGuide.jsx'
 import OpenInBrowser from './screens/OpenInBrowser.jsx'
@@ -18,6 +19,7 @@ export default function App() {
   const [profile, setProfile] = useState(undefined)
   const [loadError, setLoadError] = useState('')
   const [inSafari, setInSafari] = useState(choseSafari())
+  const [firstRun, setFirstRun] = useState(false)
 
   useEffect(() => {
     if (!configured) return
@@ -68,16 +70,30 @@ export default function App() {
   if (profile === null) {
     return session.user.is_anonymous
       ? <Shell><KidSetup onDone={loadProfile} /></Shell>
-      : <Shell><Onboarding onDone={loadProfile} email={session.user.email} /></Shell>
+      : <Shell><Onboarding onDone={(how) => { setFirstRun(how === 'created'); loadProfile() }} email={session.user.email} /></Shell>
   }
-  return <Main profile={profile} />
+  return <Main profile={profile} firstRun={firstRun} />
 }
 
-function Main({ profile }) {
+// Whoever just created a family lands in the preset picker first. Admins can
+// open it again from Today (when empty) or the Family tab.
+function Main({ profile, firstRun }) {
   const [tab, setTab] = useState('today')
+  const [picking, setPicking] = useState(firstRun && profile.role === 'admin')
+  const [reloadKey, setReloadKey] = useState(0)
+  const openPresets = profile.role === 'admin' ? () => setPicking(true) : null
   return (
     <div className="shell with-tabs">
-      <main>{tab === 'today' ? <Today profile={profile} /> : <Home profile={profile} />}</main>
+      <main>
+        {tab === 'today'
+          ? <Today key={reloadKey} profile={profile} onAddPresets={openPresets} />
+          : <Home profile={profile} onAddPresets={openPresets} />}
+      </main>
+      {picking && (
+        <PresetPicker profile={profile} firstRun={firstRun}
+          onClose={() => setPicking(false)}
+          onDone={() => { setPicking(false); setTab('today'); setReloadKey((k) => k + 1) }} />
+      )}
       <nav className="tabs">
         <button aria-current={tab === 'today'} onClick={() => setTab('today')}>Today</button>
         <button aria-current={tab === 'family'} onClick={() => setTab('family')}>Family</button>

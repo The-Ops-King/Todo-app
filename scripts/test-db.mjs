@@ -672,6 +672,40 @@ await as(mom, ({ q }) => q("select todo.set_role($1, 'admin')", [P[dad]]))
     ({ q }) => q('select * from todo.kid_setup_codes'), /permission denied/)
 }
 
+// --- presets --------------------------------------------------------------------
+
+{
+  today = '2026-09-22'
+  const car = await superuser(`select pt.id, pt.slug, pt.schedule_kind from todo.preset_tasks pt
+    join todo.presets p on p.id = pt.preset_id where p.slug = 'car' order by pt.position`)
+  check('car preset is seeded', car.length > 20, String(car.length))
+  const oil = car.find((t) => t.slug === 'car/oil-and-filter-change')
+  const wipers = car.find((t) => t.slug === 'car/replace-wiper-blades')
+  const items = car.map((t) => (t.id === oil.id ? { preset_task_id: t.id, last_done_on: '2026-03-10' } : { preset_task_id: t.id }))
+  const add = (uid, assignee) => as(uid, ({ one }) =>
+    one('select todo.add_presets($1) as n', [JSON.stringify({ assignee, items })])).then((r) => r.n)
+
+  await fails('members cannot add presets', kid1, ({ q }) =>
+    q('select todo.add_presets($1)', [JSON.stringify({ assignee: P[kid1], items })]), /only admins/)
+  await fails('preset assignee must be in the family', dad, ({ q }) =>
+    q('select todo.add_presets($1)', [JSON.stringify({ assignee: P[stranger], items })]), /not in this family/)
+
+  const n = await add(dad, P[mom])
+  check('every car task was added', n === car.length, `${n} of ${car.length}`)
+  const rows = await as(mom, ({ rows }) => rows(`select t.preset_task_id, t.schedule_kind, o.due_on::text, o.responsible_id
+    from todo.tasks t join todo.occurrences o on o.task_id = t.id and o.status = 'open'
+    where t.preset_task_id is not null`))
+  check('preset tasks go to the chosen person', rows.every((r) => r.responsible_id === P[mom]))
+  check('last done date is used', rows.find((r) => r.preset_task_id === oil.id)?.due_on === '2026-09-10')
+  check('calendar presets start on their next date', rows.find((r) => r.preset_task_id === wipers.id)?.due_on === '2026-10-01')
+  const unsure = rows.filter((r) => r.schedule_kind === 'countdown' && r.preset_task_id !== oil.id)
+  const perDay = {}
+  for (const r of unsure) perDay[r.due_on] = (perDay[r.due_on] || 0) + 1
+  check('not-sure tasks are spread out', Math.max(...Object.values(perDay)) <= 3, JSON.stringify(perDay))
+  check('spreading starts tomorrow', Object.keys(perDay).sort()[0] >= '2026-09-23', Object.keys(perDay).sort()[0])
+  check('adding the same preset again adds nothing', (await add(dad, P[mom])) === 0)
+}
+
 // --- invariant: every live task has an open occurrence ------------------------
 
 {

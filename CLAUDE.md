@@ -53,15 +53,23 @@ app rather than a bookmark.
 
 ```
 SPEC.md                         product decisions, data model, build order
-presets/DRAFT.md                preset task content awaiting approval
+presets/DRAFT.md                preset content, source of truth for the presets tables
 supabase/migrations/            schema, RLS and every state-changing function
 supabase/test/supabase-stub.sql the slice of Supabase the tests emulate
 scripts/check-env.mjs           build-time variable check
 scripts/migrate.mjs             build-time migrations + audit report
 scripts/lib/migrations.mjs      migration runner shared by deploy and tests
 scripts/test-db.mjs             database guardrails against local Postgres
+scripts/test-app.mjs            browser helpers and preset parser, no dependencies
+scripts/build-presets.mjs       presets/DRAFT.md -> a new migration of upserts
 src/                            the app
 ```
+
+**Preset content is generated, never hand-edited.** Change `presets/DRAFT.md`,
+then `node scripts/build-presets.mjs 00NN_presets_refresh.sql` with the next
+free number. It upserts by slug (`preset/task-title`), deletes rows removed
+from the file, and keeps families' links to their presets. Renaming a task
+changes its slug, which counts as remove plus add.
 
 ## Conventions
 

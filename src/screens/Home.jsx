@@ -4,7 +4,7 @@ import { inviteLink } from '../lib/invite.js'
 import { formatSetupCode } from '../lib/people.js'
 
 // The Family tab: members, kids, invites, buy link settings.
-export default function Home({ profile }) {
+export default function Home({ profile, onAddPresets }) {
   const [family, setFamily] = useState(null)
   const [members, setMembers] = useState([])
   const [error, setError] = useState('')
@@ -36,6 +36,13 @@ export default function Home({ profile }) {
           ))}
         </ul>
       </section>
+      {onAddPresets && (
+        <section className="card">
+          <h2>Presets</h2>
+          <p className="muted">Ready-made upkeep lists for a home, car, pool, pets and more. Add another any time.</p>
+          <button className="secondary" onClick={onAddPresets}>Add a preset</button>
+        </section>
+      )}
       {isAdmin && <AddKid onAdded={load} />}
       {isAdmin && <Invite />}
       {/* Signing out on a kid's phone would unlink it; only a new setup code brings it back. */}

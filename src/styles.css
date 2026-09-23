@@ -239,3 +239,36 @@ textarea { font: inherit; padding: 12px 14px; border: 1px solid var(--line); bor
 .inline select { width: auto; flex: 1; }
 .subtasks .inline span { flex: 1; }
 .preview { font-weight: 600; color: var(--accent); }
+
+/* --- presets --- */
+.sheet.tall { max-height: 96vh; }
+.preset-group { display: grid; gap: 8px; }
+.preset-group h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 6px 0 0; }
+.preset-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.preset-card {
+  display: grid; gap: 2px; text-align: left; padding: 12px;
+  background: var(--bg); color: var(--text); border: 1px solid var(--line); font-weight: 400;
+}
+.preset-card strong { font-weight: 600; }
+.preset-card span { font-size: 0.85rem; color: var(--muted); }
+.preset-card[aria-pressed='true'] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.preset-card[aria-pressed='true'] span { color: var(--accent-text); opacity: 0.85; }
+.preset-tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.preset-tasks li { display: grid; gap: 4px; }
+.preset-tasks li.off { opacity: 0.5; }
+.preset-tasks .toggle { align-items: flex-start; color: var(--text); font-size: 1rem; }
+.preset-tasks .toggle input { margin-top: 4px; }
+.pt-title { display: block; }
+.pt-meta { display: block; font-size: 0.8rem; color: var(--muted); }
+.last-done { padding-left: 26px; }
+.last-done input { width: auto; padding: 6px 8px; }
+.link.small, .small { font-size: 0.85rem; }
+.preset-tasks > li > .link.small { padding-left: 26px; }
+.sheet.tall { padding-bottom: 0; }
+.sticky-actions {
+  position: sticky; bottom: 0; margin: 0 -16px;
+  padding: 10px 16px calc(14px + env(safe-area-inset-bottom));
+  background: var(--card); border-top: 1px solid var(--line);
+  display: grid; gap: 4px;
+}
+.empty { display: grid; gap: 10px; justify-items: center; text-align: center; padding: 24px 0; }

@@ -26,7 +26,7 @@ export default function Onboarding({ onDone, email }) {
     setBusy(false)
     if (error) return setError(errorText(error))
     clearInvite()
-    onDone()
+    onDone(joining ? 'joined' : 'created')
   }
 
   return (

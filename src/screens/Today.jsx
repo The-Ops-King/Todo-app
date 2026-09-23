@@ -9,7 +9,7 @@ const TASK_FIELDS = `id, title, notes, scope, owner_id, assign_mode, lead_days, 
   schedule_kind, interval_unit, interval_count, cal_weekdays, cal_month_days, cal_months, active_months, miss_policy,
   subtasks (id, title, position), task_assignees (profile_id, position)`
 
-export default function Today({ profile }) {
+export default function Today({ profile, onAddPresets }) {
   const [family, setFamily] = useState(null)
   const [members, setMembers] = useState([])
   const [open, setOpen] = useState([])
@@ -141,9 +141,11 @@ export default function Today({ profile }) {
       {groups.overdue.length > 0 && <Section title="Overdue" tone="overdue">{groups.overdue.map(row)}</Section>}
       {groups.today.length > 0 && <Section title="Today">{groups.today.map(row)}</Section>}
       {empty && (
-        <p className="muted empty">
-          {open.length ? 'Nothing due right now.' : 'No tasks yet. Tap + to add your first one.'}
-        </p>
+        <div className="empty">
+          <p className="muted">{open.length ? 'Nothing due right now.' : 'No tasks yet.'}</p>
+          {!open.length && onAddPresets && <button onClick={onAddPresets}>Pick from presets</button>}
+          {!open.length && <p className="muted small">Or tap + to add one yourself.</p>}
+        </div>
       )}
       {groups.upcoming.length > 0 && <Section title="Coming up">{groups.upcoming.map(row)}</Section>}
       {groups.later.length > 0 && <Later>{groups.later.map(row)}</Later>}

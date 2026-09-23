@@ -55,6 +55,31 @@ eq('kids never see buy links', showsBuyLinks({ is_kid: true, hide_buy_links: fal
 eq('adults see buy links', showsBuyLinks({ is_kid: false, hide_buy_links: false }), true)
 eq('admin can hide them', showsBuyLinks({ is_kid: false, hide_buy_links: true }), false)
 
+const { parseRepeats, parseDraft } = await import('./build-presets.mjs')
+const pr = (s) => JSON.stringify(parseRepeats(s))
+eq('every year', pr('Every year'), JSON.stringify({ miss_policy: 'carry', schedule_kind: 'countdown', interval_unit: 'year', interval_count: 1 }))
+eq('skip daily', pr('Every day (skip)'), JSON.stringify({ miss_policy: 'skip', schedule_kind: 'countdown', interval_unit: 'day', interval_count: 1 }))
+eq('season wraps new year', JSON.stringify(parseRepeats('Every week, Oct to Mar').active_months), '[10,11,12,1,2,3]')
+eq('season with skip', pr('Every day, May to Sep (skip)'),
+  JSON.stringify({ miss_policy: 'skip', active_months: [5, 6, 7, 8, 9], schedule_kind: 'countdown', interval_unit: 'day', interval_count: 1 }))
+eq('weekday pair', JSON.stringify(parseRepeats('Every Mon and Thu').cal_weekdays), '[1,4]')
+eq('weekday range wraps', JSON.stringify(parseRepeats('Every Sun to Thu (skip)').cal_weekdays), '[0,1,2,3,4]')
+eq('named weekday with note', JSON.stringify(parseRepeats('Every Tuesday (set your pickup day)').cal_weekdays), '[2]')
+eq('month list', pr('Every Mar, May, Aug and Oct'),
+  JSON.stringify({ miss_policy: 'carry', schedule_kind: 'calendar', cal_months: [3, 5, 8, 10], cal_month_days: [1] }))
+eq('month days', pr('Every Jan 15, Apr 15, Jun 15 and Sep 15'),
+  JSON.stringify({ miss_policy: 'carry', schedule_kind: 'calendar', cal_months: [1, 4, 6, 9], cal_month_days: [15] }))
+eq('month on the', pr('Every month on the 1st'), JSON.stringify({ miss_policy: 'carry', schedule_kind: 'calendar', cal_month_days: [1] }))
+let threw = ''
+try { parseRepeats('Twice a fortnight') } catch (e) { threw = e.message }
+eq('unknown phrasing is refused', /does not start/.test(threw), true)
+threw = ''
+try { parseRepeats('Every Jan 1 and Jul 15') } catch (e) { threw = e.message }
+eq('mixed month days are refused', /not supported/.test(threw), true)
+const sample = parseDraft('## Home\n### Pool (water)\n| Task | Repeats | Subtasks | Buy |\n|---|---|---|---|\n| Skim | Every week | Skim; Baskets | pool net [size] |\n')
+eq('draft parse', JSON.stringify([sample[0].slug, sample[0].description, sample[0].tasks[0].slug, sample[0].tasks[0].subtasks, sample[0].tasks[0].buy_query, sample[0].tasks[0].lead_days]),
+  JSON.stringify(['pool', 'water', 'pool/skim', ['Skim', 'Baskets'], 'pool net', 1]))
+
 if (failures.length) {
   console.error(`test-app: ${failures.length} failed, ${passed} passed`)
   for (const f of failures) console.error(`  x ${f}`)
