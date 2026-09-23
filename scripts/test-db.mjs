@@ -755,6 +755,32 @@ await as(mom, ({ q }) => q("select todo.set_role($1, 'admin')", [P[dad]]))
   check('others fall back to the batch assignee', ownerOf(dog[1].id) === P[dad] && ownerOf(dog[2].id) === P[dad])
 }
 
+// --- removing a preset -----------------------------------------------------------
+
+{
+  const fromDog = await as(dad, ({ rows }) => rows(`select t.id, t.preset_task_id from todo.tasks t
+    join todo.preset_tasks pt on pt.id = t.preset_task_id join todo.presets p on p.id = pt.preset_id
+    where p.slug = 'dog' order by pt.position`))
+  check('dog preset tasks exist to remove', fromDog.length === 3, String(fromDog.length))
+  const [a, b, keep] = fromDog
+  const live = (ids) => superuser('select count(*)::int as n from todo.tasks where id = any($1) and deleted_at is null', [ids]).then((r) => r[0].n)
+
+  await fails('members cannot remove presets', kid1,
+    ({ q }) => q('select todo.delete_tasks($1)', [[a.id]]), /only admins/)
+  await fails('another family\'s task stops the whole removal', dad,
+    ({ q }) => q('select todo.delete_tasks($1)', [[a.id, diary]]), /task not found/)
+  check('nothing is removed when one id is bad', (await live([a.id, b.id])) === 2)
+
+  const n = (await as(dad, ({ one }) => one('select todo.delete_tasks($1) as n', [[a.id, b.id, a.id]]))).n
+  check('removes the chosen tasks once each', n === 2 && (await live([a.id, b.id])) === 0, String(n))
+  check('unchecked tasks stay', (await live([keep.id])) === 1)
+  const open = await superuser("select count(*)::int as n from todo.occurrences where task_id = any($1) and status = 'open'", [[a.id, b.id]])
+  check('removed tasks leave nothing open', open[0].n === 0)
+  const readd = await as(dad, ({ one }) => one('select todo.add_presets($1) as n',
+    [JSON.stringify({ assignee: P[dad], items: [{ preset_task_id: a.preset_task_id }] })]))
+  check('a removed preset task can be added again', readd.n === 1)
+}
+
 // --- icons and photos ------------------------------------------------------------
 
 {

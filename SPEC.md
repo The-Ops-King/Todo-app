@@ -173,6 +173,10 @@ One accidental tap should never push the oil change out 6 months.
 - The family icon shows in the app header and on the Family tab, and is the badge on the daily summary push.
 - The Everyone view shows who each task is on by icon.
 
+## Removing a preset
+
+An admin can remove a preset from the Family tab. It lists every family task that came from it, all checked, including ones that were edited or reassigned. Unchecked tasks stay. The rest are deleted in one step, all or nothing, and their completion history stays. The preset can be added again later.
+
 ## Controls
 
 No native dropdowns. A person is picked by tapping their icon. Two to four short options are a segmented control. Options that need a sentence are a radio list.

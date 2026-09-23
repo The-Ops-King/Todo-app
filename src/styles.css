@@ -366,3 +366,14 @@ img.avatar { object-fit: cover; background: var(--line); }
 .person { position: relative; }
 .person-order { position: absolute; top: 4px; right: 6px; min-width: 18px; height: 18px; border-radius: 9px; background: var(--accent);
   color: var(--accent-text); font-size: 0.72rem; font-weight: 700; display: grid; place-items: center; }
+
+/* --- removing a preset --- */
+.preset-used { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.preset-used li { display: flex; align-items: center; gap: 10px; }
+.preset-used-name { flex: 1; min-width: 0; font-weight: 600; }
+.remove-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 50vh; overflow-y: auto; }
+.remove-list .toggle { align-items: flex-start; gap: 12px; padding: 10px 2px; color: var(--text); font-size: 1rem; border-bottom: 1px solid var(--line); }
+.remove-list .toggle input { margin-top: 3px; width: 20px; height: 20px; accent-color: var(--error); }
+.remove-list .task-text { display: grid; gap: 2px; }
+.danger-btn { background: var(--error); color: var(--card); }
+.preset-used .preset-icon { margin: 0; }

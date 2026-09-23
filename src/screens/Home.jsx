@@ -5,6 +5,8 @@ import { formatSetupCode } from '../lib/people.js'
 import { Avatar, FamilyIcon, PERSON_FIELDS } from '../lib/avatar.jsx'
 import IconEditor from './IconEditor.jsx'
 import { Segmented } from '../components/Choice.jsx'
+import { Icon, presetStyle } from '../lib/presetStyle.jsx'
+import RemovePreset from './RemovePreset.jsx'
 
 // The Family tab: members, kids, invites, buy link settings.
 export default function Home({ profile, onAddPresets, onAssign, onFamilyChanged }) {
@@ -12,6 +14,8 @@ export default function Home({ profile, onAddPresets, onAssign, onFamilyChanged 
   const [members, setMembers] = useState([])
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(null)
+  const [added, setAdded] = useState([])
+  const [removing, setRemoving] = useState(null)
   const isAdmin = profile.role === 'admin'
 
   const load = useCallback(async () => {
@@ -22,7 +26,22 @@ export default function Home({ profile, onAddPresets, onAssign, onFamilyChanged 
     if (f.error || m.error) return setError(errorText(f.error || m.error))
     setFamily(f.data)
     setMembers(m.data)
-  }, [])
+    if (!isAdmin) return
+    // Presets in use: live family tasks grouped by the preset they came from.
+    const t = await supabase.from('tasks')
+      .select(`id, title, schedule_kind, interval_unit, interval_count, cal_weekdays, cal_month_days, cal_months,
+        active_months, miss_policy, preset_task:preset_tasks!inner (preset:presets!inner (id, name, slug, position))`)
+      .eq('scope', 'family')
+      .order('title')
+    if (t.error) return setError(errorText(t.error))
+    const byPreset = new Map()
+    for (const task of t.data) {
+      const preset = task.preset_task.preset
+      if (!byPreset.has(preset.id)) byPreset.set(preset.id, { preset, tasks: [] })
+      byPreset.get(preset.id).tasks.push(task)
+    }
+    setAdded([...byPreset.values()].sort((a, b) => a.preset.position - b.preset.position))
+  }, [isAdmin])
 
   useEffect(() => {
     load()
@@ -53,6 +72,20 @@ export default function Home({ profile, onAddPresets, onAssign, onFamilyChanged 
         <section className="card">
           <h2>Presets</h2>
           <p className="muted">Ready-made upkeep lists for a home, car, pool, pets and more. Add another any time.</p>
+          {added.length > 0 && (
+            <ul className="preset-used">
+              {added.map(({ preset, tasks }) => {
+                const { color, icon } = presetStyle(preset)
+                return (
+                  <li key={preset.id}>
+                    <span className="preset-icon" style={{ '--c': color }}><Icon name={icon} size={20} color={color} /></span>
+                    <span className="preset-used-name">{preset.name}<span className="muted small"> {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}</span></span>
+                    <button className="link danger" onClick={() => setRemoving({ preset, tasks })}>Remove</button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
           <button className="secondary" onClick={onAddPresets}>Add a preset</button>
         </section>
       )}
@@ -60,6 +93,10 @@ export default function Home({ profile, onAddPresets, onAssign, onFamilyChanged 
       {isAdmin && <Invite />}
       {/* Signing out on a kid's phone would unlink it; only a new setup code brings it back. */}
       {!profile.is_kid && <button className="link" onClick={() => supabase.auth.signOut()}>Sign out</button>}
+      {removing && (
+        <RemovePreset {...removing} onClose={() => setRemoving(null)}
+          onDone={() => { setRemoving(null); load() }} />
+      )}
       {editing && (
         <IconEditor {...editing} members={members} self={editing.person?.id === profile.id}
           onClose={() => { setEditing(null); load() }}
