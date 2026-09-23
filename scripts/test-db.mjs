@@ -706,6 +706,55 @@ await as(mom, ({ q }) => q("select todo.set_role($1, 'admin')", [P[dad]]))
   check('adding the same preset again adds nothing', (await add(dad, P[mom])) === 0)
 }
 
+// --- assigning in bulk -----------------------------------------------------------
+
+{
+  today = '2026-09-22'
+  const flags = await as(dad, ({ rows }) => rows('select id, needs_welcome from todo.profiles'))
+  const flag = (pid) => flags.find((r) => r.id === pid)?.needs_welcome
+  check('adults who joined by invite need a welcome', flag(P[mom]) === true && flag(P[kid1]) === true)
+  check('the family creator does not', flag(P[dad]) === false)
+  await fails('members cannot dismiss a welcome', kid1,
+    ({ q }) => q('select todo.dismiss_welcome($1)', [P[mom]]), /only admins/)
+  await as(dad, ({ q }) => q('select todo.dismiss_welcome($1)', [P[mom]]))
+  const momFlag = await as(dad, ({ one }) => one('select needs_welcome from todo.profiles where id = $1', [P[mom]]))
+  check('dismissing clears the welcome', momFlag.needs_welcome === false)
+
+  const mine = []
+  for (const title of ['Sweep porch', 'Water ferns']) {
+    mine.push(await createTask(dad, { scope: 'family', title, schedule_kind: 'countdown', interval_unit: 'week',
+      interval_count: 1, assignees: [P[dad]], first_due_on: '2026-09-25' }))
+  }
+  await fails('members cannot reassign', kid2, ({ q }) =>
+    q('select todo.reassign_tasks($1, $2)', [mine, P[kid2]]), /only admins/)
+  await fails('cannot reassign to an outsider', dad, ({ q }) =>
+    q('select todo.reassign_tasks($1, $2)', [mine, P[stranger]]), /not in this family/)
+  const moved = await as(dad, ({ one }) => one('select todo.reassign_tasks($1, $2) as n', [[...mine, pool], P[kid2]])).then((r) => r.n)
+  check('only single-owner tasks move', moved === 2, String(moved))
+  const after = await openOf(kid2, mine[0])
+  const owner = await as(dad, ({ one }) => one('select profile_id from todo.task_assignees where task_id = $1', [mine[1]]))
+  check('open occurrence and owner both move', after[0]?.responsible_id === P[kid2] && owner.profile_id === P[kid2])
+  const poolPeople = await as(dad, ({ rows }) => rows('select profile_id from todo.task_assignees where task_id = $1 order by position', [pool]))
+  check('pooled task is left alone', poolPeople.map((r) => r.profile_id).join() === [P[kid1], P[kid2]].join())
+  const kid2Flag = await as(dad, ({ one }) => one('select needs_welcome from todo.profiles where id = $1', [P[kid2]]))
+  check('giving someone tasks clears their welcome', kid2Flag.needs_welcome === false)
+  check('reassigning again moves nothing', (await as(dad, ({ one }) =>
+    one('select todo.reassign_tasks($1, $2) as n', [mine, P[kid2]]))).n === 0)
+
+  const dog = await superuser(`select pt.id from todo.preset_tasks pt join todo.presets p on p.id = pt.preset_id
+    where p.slug = 'dog' order by pt.position limit 3`)
+  const items = [{ preset_task_id: dog[0].id, assignee: P[kid1] }, { preset_task_id: dog[1].id }, { preset_task_id: dog[2].id }]
+  await fails('per-task assignee must be in the family', dad, ({ q }) =>
+    q('select todo.add_presets($1)', [JSON.stringify({ assignee: P[dad], items: [{ preset_task_id: dog[0].id, assignee: P[stranger] }] })]),
+    /not in this family/)
+  await as(dad, ({ q }) => q('select todo.add_presets($1)', [JSON.stringify({ assignee: P[dad], items })]))
+  const owners = await as(dad, ({ rows }) => rows(`select t.preset_task_id, a.profile_id from todo.tasks t
+    join todo.task_assignees a on a.task_id = t.id where t.preset_task_id = any($1)`, [dog.map((d) => d.id)]))
+  const ownerOf = (id) => owners.find((o) => o.preset_task_id === id)?.profile_id
+  check('per-task assignee wins', ownerOf(dog[0].id) === P[kid1])
+  check('others fall back to the batch assignee', ownerOf(dog[1].id) === P[dad] && ownerOf(dog[2].id) === P[dad])
+}
+
 // --- invariant: every live task has an open occurrence ------------------------
 
 {

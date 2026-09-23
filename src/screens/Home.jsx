@@ -4,7 +4,7 @@ import { inviteLink } from '../lib/invite.js'
 import { formatSetupCode } from '../lib/people.js'
 
 // The Family tab: members, kids, invites, buy link settings.
-export default function Home({ profile, onAddPresets }) {
+export default function Home({ profile, onAddPresets, onAssign }) {
   const [family, setFamily] = useState(null)
   const [members, setMembers] = useState([])
   const [error, setError] = useState('')
@@ -32,7 +32,7 @@ export default function Home({ profile, onAddPresets }) {
         {error && <p className="error">{error}</p>}
         <ul className="members">
           {members.map((m) => (
-            <Member key={m.id} member={m} self={m.id === profile.id} isAdmin={isAdmin} onChange={load} />
+            <Member key={m.id} member={m} self={m.id === profile.id} isAdmin={isAdmin} onChange={load} onAssign={onAssign} />
           ))}
         </ul>
       </section>
@@ -43,7 +43,7 @@ export default function Home({ profile, onAddPresets }) {
           <button className="secondary" onClick={onAddPresets}>Add a preset</button>
         </section>
       )}
-      {isAdmin && <AddKid onAdded={load} />}
+      {isAdmin && <AddKid onAdded={(kid) => { load(); onAssign?.(kid) }} />}
       {isAdmin && <Invite />}
       {/* Signing out on a kid's phone would unlink it; only a new setup code brings it back. */}
       {!profile.is_kid && <button className="link" onClick={() => supabase.auth.signOut()}>Sign out</button>}
@@ -51,7 +51,7 @@ export default function Home({ profile, onAddPresets }) {
   )
 }
 
-function Member({ member, self, isAdmin, onChange }) {
+function Member({ member, self, isAdmin, onChange, onAssign }) {
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -84,6 +84,9 @@ function Member({ member, self, isAdmin, onChange }) {
         {member.role === 'admin' && <span className="tag">admin</span>}
         {member.is_kid && <span className="tag">kid</span>}
       </div>
+      {onAssign && !self && (
+        <button className="link" onClick={() => onAssign(member)}>Assign tasks</button>
+      )}
       {isAdmin && member.is_kid && (
         <button className="link" disabled={busy} onClick={newCode}>
           {code ? 'Make another code' : 'Set up a phone'}
@@ -133,7 +136,7 @@ function AddKid({ onAdded }) {
     if (codeError) setError(errorText(codeError))
     setAdded({ name: name.trim(), code })
     setName('')
-    onAdded()
+    onAdded({ id, display_name: name.trim() })
   }
 
   return (

@@ -150,8 +150,8 @@ One accidental tap should never push the oil change out 6 months.
 2. Your name.
 3. Create your family (name; time zone detected).
 4. Add people: invite adults by link, add kids and set up their phones with a code.
-5. Pick presets. Each preset shows all its tasks checked. Uncheck what does not apply. For each remaining task: "When did you last do this?" with a date or "Not sure". "Not sure" puts it in Upcoming, due in 7 days.
-6. Assign family tasks (defaults to you).
+5. Pick presets, in four steps: pick presets; review one list of every task and swipe away what does not apply; answer "When did you last do this?" one card at a time for tasks that repeat monthly or less often (quick answers, an exact date, or "not sure"); then "Who does what?", tap a person and then their tasks. "Not sure" tasks are spread three a day from tomorrow. Fixed-date tasks start on their next date.
+6. After adding a kid, "Which tasks go to them?" opens. Adults who join by invite trigger a banner for admins until they are given tasks or dismissed. Every member row has "Assign tasks".
 7. Install to Home Screen, then allow notifications, then pick summary time. iOS only allows web push after install, so the order matters.
 
 ## Screens

@@ -5,6 +5,7 @@ import Onboarding from './screens/Onboarding.jsx'
 import Home from './screens/Home.jsx'
 import Today from './screens/Today.jsx'
 import PresetPicker from './screens/PresetPicker.jsx'
+import AssignTasks from './screens/AssignTasks.jsx'
 import KidSetup from './screens/KidSetup.jsx'
 import InstallGuide from './screens/InstallGuide.jsx'
 import OpenInBrowser from './screens/OpenInBrowser.jsx'
@@ -76,23 +77,64 @@ export default function App() {
 }
 
 // Whoever just created a family lands in the preset picker first. Admins can
-// open it again from Today (when empty) or the Family tab.
+// open it again from Today (when empty) or the Family tab. Admins also get a
+// nudge when an adult joins by invite: "give them some tasks?"
 function Main({ profile, firstRun }) {
+  const isAdmin = profile.role === 'admin'
   const [tab, setTab] = useState('today')
-  const [picking, setPicking] = useState(firstRun && profile.role === 'admin')
+  const [picking, setPicking] = useState(firstRun && isAdmin)
+  const [assigning, setAssigning] = useState(null)
+  const [newcomer, setNewcomer] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
-  const openPresets = profile.role === 'admin' ? () => setPicking(true) : null
+
+  const checkNewcomers = useCallback(async () => {
+    if (!isAdmin) return
+    const { data } = await supabase.from('profiles').select('id, display_name')
+      .eq('needs_welcome', true).neq('id', profile.id).order('created_at').limit(1)
+    setNewcomer(data?.[0] || null)
+  }, [isAdmin, profile.id])
+
+  useEffect(() => {
+    checkNewcomers()
+  }, [checkNewcomers])
+
+  const refresh = () => {
+    setReloadKey((k) => k + 1)
+    checkNewcomers()
+  }
+  const openPresets = isAdmin ? () => setPicking(true) : null
+  const openAssign = isAdmin ? (person) => setAssigning(person) : null
+
+  async function notNow(person) {
+    await supabase.rpc('dismiss_welcome', { p_profile: person.id })
+    checkNewcomers()
+  }
+
   return (
     <div className="shell with-tabs">
+      {newcomer && !assigning && !picking && (
+        <div className="banner">
+          <span><strong>{newcomer.display_name}</strong> joined. Give them some tasks?</span>
+          <div className="inline">
+            <button className="secondary small-btn" onClick={() => setAssigning(newcomer)}>Assign tasks</button>
+            <button className="link" onClick={() => notNow(newcomer)}>Not now</button>
+          </div>
+        </div>
+      )}
       <main>
         {tab === 'today'
           ? <Today key={reloadKey} profile={profile} onAddPresets={openPresets} />
-          : <Home profile={profile} onAddPresets={openPresets} />}
+          : <Home profile={profile} onAddPresets={openPresets} onAssign={openAssign} />}
       </main>
       {picking && (
         <PresetPicker profile={profile} firstRun={firstRun}
           onClose={() => setPicking(false)}
-          onDone={() => { setPicking(false); setTab('today'); setReloadKey((k) => k + 1) }} />
+          onDone={() => { setPicking(false); setTab('today'); refresh() }} />
+      )}
+      {assigning && (
+        <AssignTasks person={assigning}
+          onClose={() => { if (newcomer?.id === assigning.id) notNow(assigning); setAssigning(null) }}
+          onDone={() => { setAssigning(null); refresh() }} />
       )}
       <nav className="tabs">
         <button aria-current={tab === 'today'} onClick={() => setTab('today')}>Today</button>
