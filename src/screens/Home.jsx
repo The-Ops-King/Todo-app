@@ -3,7 +3,7 @@ import { errorText, supabase } from '../lib/supabase.js'
 import { inviteLink } from '../lib/invite.js'
 import { formatSetupCode } from '../lib/people.js'
 
-// Placeholder home until Today is built: family, members, invites, kids.
+// The Family tab: members, kids, invites, buy link settings.
 export default function Home({ profile }) {
   const [family, setFamily] = useState(null)
   const [members, setMembers] = useState([])
@@ -28,7 +28,7 @@ export default function Home({ profile }) {
     <div className="stack">
       <section className="card">
         <h1>{family ? family.name : '…'}</h1>
-        <p className="muted">Hi {profile.display_name}. Your to-do list is coming next.</p>
+        <p className="muted">Signed in as {profile.display_name}.</p>
         {error && <p className="error">{error}</p>}
         <ul className="members">
           {members.map((m) => (

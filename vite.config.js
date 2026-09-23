@@ -22,6 +22,8 @@ export default defineConfig(() => {
     define: {
       __SUPABASE_URL__: JSON.stringify(env.url),
       __SUPABASE_KEY__: JSON.stringify(env.key),
+      // Placeholder until there is an Associates account.
+      __AMAZON_TAG__: JSON.stringify(process.env.AMAZON_TAG || 'tododash-placeholder-20'),
     },
   }
 })

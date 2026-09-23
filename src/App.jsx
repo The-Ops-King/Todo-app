@@ -3,6 +3,7 @@ import { configured, supabase } from './lib/supabase.js'
 import SignIn from './screens/SignIn.jsx'
 import Onboarding from './screens/Onboarding.jsx'
 import Home from './screens/Home.jsx'
+import Today from './screens/Today.jsx'
 import KidSetup from './screens/KidSetup.jsx'
 import InstallGuide from './screens/InstallGuide.jsx'
 import OpenInBrowser from './screens/OpenInBrowser.jsx'
@@ -69,7 +70,20 @@ export default function App() {
       ? <Shell><KidSetup onDone={loadProfile} /></Shell>
       : <Shell><Onboarding onDone={loadProfile} email={session.user.email} /></Shell>
   }
-  return <Shell><Home profile={profile} /></Shell>
+  return <Main profile={profile} />
+}
+
+function Main({ profile }) {
+  const [tab, setTab] = useState('today')
+  return (
+    <div className="shell with-tabs">
+      <main>{tab === 'today' ? <Today profile={profile} /> : <Home profile={profile} />}</main>
+      <nav className="tabs">
+        <button aria-current={tab === 'today'} onClick={() => setTab('today')}>Today</button>
+        <button aria-current={tab === 'family'} onClick={() => setTab('family')}>Family</button>
+      </nav>
+    </div>
+  )
 }
 
 function Shell({ children }) {
