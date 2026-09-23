@@ -74,13 +74,13 @@ export default function App() {
       ? <Shell><KidSetup onDone={loadProfile} /></Shell>
       : <Shell><Onboarding onDone={(how) => { setFirstRun(how === 'created'); loadProfile() }} email={session.user.email} /></Shell>
   }
-  return <Main profile={profile} firstRun={firstRun} />
+  return <Main profile={profile} firstRun={firstRun} onLeft={loadProfile} />
 }
 
 // Whoever just created a family lands in the preset picker first. Admins can
 // open it again from Today (when empty) or the Family tab. Admins also get a
 // nudge when an adult joins by invite: "give them some tasks?"
-function Main({ profile, firstRun }) {
+function Main({ profile, firstRun, onLeft }) {
   const isAdmin = profile.role === 'admin'
   const [tab, setTab] = useState('today')
   const [picking, setPicking] = useState(firstRun && isAdmin)
@@ -139,7 +139,7 @@ function Main({ profile, firstRun }) {
       <main>
         {tab === 'today'
           ? <Today key={reloadKey} profile={profile} onAddPresets={openPresets} />
-          : <Home profile={profile} onAddPresets={openPresets} onAssign={openAssign} onFamilyChanged={loadFamily} />}
+          : <Home profile={profile} onAddPresets={openPresets} onAssign={openAssign} onFamilyChanged={loadFamily} onLeft={onLeft} />}
       </main>
       {picking && (
         <PresetPicker profile={profile} firstRun={firstRun}

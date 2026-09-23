@@ -120,6 +120,13 @@ The family creator is the first admin. A family must always have at least one
 admin, so the database refuses a change that would leave none. Kid accounts
 are always members and can never be made admins.
 
+Removing someone or leaving never orphans a task. A task only they were on
+goes to the person the admin picks (on leaving, to the longest-standing other
+admin). On a shared task they come off the list and the rotation picks again.
+Their personal tasks are deleted. History keeps their name. Admins cannot
+remove themselves (they use Leave family), kids cannot leave on their own, and
+the last admin cannot leave.
+
 These rules are enforced in Postgres through row level security and
 `security definer` functions, never only in the React code. The browser can
 read what it is allowed to read. Every state change (complete, undo, skip,

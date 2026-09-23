@@ -564,10 +564,6 @@ const read = await createTask(kid1, {
 
 // --- members and admins ----------------------------------------------------------
 
-await fails('removing someone with tasks is blocked', dad,
-  ({ q }) => q('select todo.remove_member($1)', [P[kid2]]), /reassign or delete/)
-await fails('members cannot remove people', kid1,
-  ({ q }) => q('select todo.remove_member($1)', [P[kid2]]), /only admins/)
 await fails('last admin cannot step down', stranger,
   ({ q }) => q("select todo.set_role($1, 'member')", [P[stranger]]), /at least one admin/)
 await as(dad, ({ q }) => q("select todo.set_role($1, 'member')", [P[dad]]))
@@ -842,6 +838,77 @@ await as(mom, ({ q }) => q("select todo.set_role($1, 'admin')", [P[dad]]))
   check('admins set the family icon', fam.icon_emoji === '🏡' && fam.icon_color === '#2f6f4e')
   const other = await superuser('select icon_emoji from todo.families where id = $1', [strangerFamily])
   check('only in their own family', other[0].icon_emoji === null)
+}
+
+// --- removing people and leaving ---------------------------------------------------
+
+{
+  today = '2026-09-22'
+  const name = async (pid) => (await superuser('select display_name from todo.profiles where id = $1', [pid]))[0].display_name
+  const kid2Name = await name(P[kid2])
+  const assigned = async (task) => (await superuser('select profile_id from todo.task_assignees where task_id = $1 order by position', [task])).map((r) => r.profile_id)
+  const openHolder = async (task) => (await superuser("select responsible_id from todo.occurrences where task_id = $1 and status = 'open'", [task]))[0]?.responsible_id
+
+  // What kid2 is on right now, found from the data rather than assumed.
+  const onTasks = await superuser(`select t.id, t.assign_mode, (select count(*)::int from todo.task_assignees b where b.task_id = t.id) as n
+    from todo.tasks t join todo.task_assignees a on a.task_id = t.id where a.profile_id = $1 and t.deleted_at is null`, [P[kid2]])
+  const solo = onTasks.find((t) => t.n === 1)
+  const shared = onTasks.filter((t) => t.n > 1)
+  check('kid2 has a solo task and a shared one to test with', solo && shared.length > 0, JSON.stringify(onTasks))
+  const theirDone = (await superuser("select id from todo.occurrences where completed_by = $1", [P[kid2]])).map((r) => r.id)
+  const heldBefore = {}
+  for (const t of shared) heldBefore[t.id] = await openHolder(t.id)
+  check('kid2 holds an open turn on a shared task', Object.values(heldBefore).includes(P[kid2]))
+  const personal = await createTask(kid2, { scope: 'personal', title: 'Kid2 diary', schedule_kind: 'countdown',
+    interval_unit: 'day', interval_count: 1, first_due_on: '2026-09-22' })
+
+  await fails('members cannot remove people', kid1,
+    ({ q }) => q('select todo.remove_member($1, $2)', [P[kid2], P[kid1]]), /only admins/)
+  await fails('admins cannot remove themselves here', dad,
+    ({ q }) => q('select todo.remove_member($1, $2)', [P[dad], P[mom]]), /Leave family/)
+  await fails('the heir must be in the family', dad,
+    ({ q }) => q('select todo.remove_member($1, $2)', [P[kid2], P[stranger]]), /someone else in the family/)
+  await fails('the heir cannot be the person leaving', dad,
+    ({ q }) => q('select todo.remove_member($1, $2)', [P[kid2], P[kid2]]), /someone else in the family/)
+  await fails('another family cannot remove your people', stranger,
+    ({ q }) => q('select todo.remove_member($1, $2)', [P[kid2], P[stranger]]), /member not found/)
+  check('a refused removal changes nothing', (await assigned(solo.id)).includes(P[kid2]))
+
+  await as(dad, ({ q }) => q('select todo.remove_member($1, $2)', [P[kid2], P[mom]]))
+  check('the profile is gone', (await superuser('select 1 from todo.profiles where id = $1', [P[kid2]])).length === 0)
+  check('a task only they had goes to the heir', (await assigned(solo.id)).join() === P[mom] && (await openHolder(solo.id)) === P[mom])
+  for (const t of shared) {
+    const people = await assigned(t.id)
+    const holder = await openHolder(t.id)
+    check(`shared ${t.assign_mode} task drops them`, !people.includes(P[kid2]) && people.length === t.n - 1)
+    const expected = t.assign_mode === 'pool' ? holder === null
+      : heldBefore[t.id] === P[kid2] ? people.includes(holder) : holder === heldBefore[t.id]
+    check(`shared ${t.assign_mode} task: their turn moves on, others' stay`, expected, String(holder))
+  }
+  check('their personal tasks go with them', (await superuser('select 1 from todo.tasks where id = $1', [personal])).length === 0)
+  const history = await superuser('select completed_by, completed_by_name from todo.occurrences where id = any($1)', [theirDone])
+  check('history keeps their name', theirDone.length > 0 && history.every((h) => h.completed_by === null && h.completed_by_name === kid2Name),
+    JSON.stringify(history))
+  const gone = await as(kid2, ({ rows }) => rows('select id from todo.profiles'))
+  check('their login no longer sees the family', gone.length === 0)
+  const log = await as(dad, ({ rows }) => rows("select payload ->> 'name' as n from todo.activity where kind = 'member_removed'"))
+  check('the removal is logged', log.some((l) => l.n === kid2Name))
+
+  // Kids: they cannot leave, an admin removes the phone.
+  const sally = (await superuser("select id, user_id from todo.profiles where display_name = 'Sally'"))[0]
+  await fails('kids cannot leave on their own', sally.user_id, ({ q }) => q('select todo.leave_family()'), /ask an admin/)
+  await as(mom, ({ q }) => q('select todo.remove_member($1, $2)', [sally.id, P[dad]]))
+  check('a removed kid\'s phone sees nothing', (await as(sally.user_id, ({ rows }) => rows('select id from todo.profiles'))).length === 0)
+
+  // Leaving.
+  await fails('the only admin cannot leave', stranger, ({ q }) => q('select todo.leave_family()'), /someone else an admin/)
+  const momTasks = (await superuser('select task_id from todo.task_assignees where profile_id = $1', [P[mom]])).map((r) => r.task_id)
+  await as(mom, ({ q }) => q('select todo.leave_family()'))
+  check('an admin can leave while another remains', (await superuser('select 1 from todo.profiles where id = $1', [P[mom]])).length === 0)
+  const heirs = await superuser('select distinct profile_id from todo.task_assignees where task_id = any($1)', [momTasks])
+  check('a leaver\'s tasks stay covered', momTasks.length > 0 && heirs.every((h) => h.profile_id !== P[mom]))
+  const dadHas = await superuser('select 1 from todo.task_assignees where task_id = $1 and profile_id = $2', [solo.id, P[dad]])
+  check('solo tasks go to the other admin', dadHas.length === 1)
 }
 
 // --- invariant: every live task has an open occurrence ------------------------

@@ -7,15 +7,18 @@ import IconEditor from './IconEditor.jsx'
 import { Segmented } from '../components/Choice.jsx'
 import { Icon, presetStyle } from '../lib/presetStyle.jsx'
 import RemovePreset from './RemovePreset.jsx'
+import { LeaveFamily, RemoveMember } from './RemoveMember.jsx'
 
 // The Family tab: members, kids, invites, buy link settings.
-export default function Home({ profile, onAddPresets, onAssign, onFamilyChanged }) {
+export default function Home({ profile, onAddPresets, onAssign, onFamilyChanged, onLeft }) {
   const [family, setFamily] = useState(null)
   const [members, setMembers] = useState([])
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(null)
   const [added, setAdded] = useState([])
   const [removing, setRemoving] = useState(null)
+  const [removingPerson, setRemovingPerson] = useState(null)
+  const [leaving, setLeaving] = useState(false)
   const isAdmin = profile.role === 'admin'
 
   const load = useCallback(async () => {
@@ -64,7 +67,8 @@ export default function Home({ profile, onAddPresets, onAssign, onFamilyChanged 
         <ul className="members">
           {members.map((m) => (
             <Member key={m.id} member={m} members={members} self={m.id === profile.id} isAdmin={isAdmin}
-              onChange={load} onAssign={onAssign} onEditIcon={() => setEditing({ person: m })} />
+              onChange={load} onAssign={onAssign} onEditIcon={() => setEditing({ person: m })}
+              onRemove={() => setRemovingPerson(m)} />
           ))}
         </ul>
       </section>
@@ -92,7 +96,21 @@ export default function Home({ profile, onAddPresets, onAssign, onFamilyChanged 
       {isAdmin && <AddKid onAdded={(kid) => { load(); onAssign?.(kid) }} />}
       {isAdmin && <Invite />}
       {/* Signing out on a kid's phone would unlink it; only a new setup code brings it back. */}
-      {!profile.is_kid && <button className="link" onClick={() => supabase.auth.signOut()}>Sign out</button>}
+      {!profile.is_kid && (
+        <div className="inline spread">
+          <button className="link" onClick={() => supabase.auth.signOut()}>Sign out</button>
+          <button className="link danger" onClick={() => setLeaving(true)}>Leave family</button>
+        </div>
+      )}
+      {removingPerson && (
+        <RemoveMember person={removingPerson} members={members} me={profile.id}
+          onClose={() => setRemovingPerson(null)}
+          onDone={() => { setRemovingPerson(null); load() }} />
+      )}
+      {leaving && (
+        <LeaveFamily profile={profile} members={members} familyName={family?.name}
+          onClose={() => setLeaving(false)} onLeft={onLeft} />
+      )}
       {removing && (
         <RemovePreset {...removing} onClose={() => setRemoving(null)}
           onDone={() => { setRemoving(null); load() }} />
@@ -106,7 +124,7 @@ export default function Home({ profile, onAddPresets, onAssign, onFamilyChanged 
   )
 }
 
-function Member({ member, members, self, isAdmin, onChange, onAssign, onEditIcon }) {
+function Member({ member, members, self, isAdmin, onChange, onAssign, onEditIcon, onRemove }) {
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -118,6 +136,18 @@ function Member({ member, members, self, isAdmin, onChange, onAssign, onEditIcon
     setBusy(false)
     if (error) return setError(errorText(error))
     setCode(data)
+  }
+
+  async function toggleRole() {
+    setBusy(true)
+    setError('')
+    const { error } = await supabase.rpc('set_role', {
+      p_profile: member.id,
+      p_role: member.role === 'admin' ? 'member' : 'admin',
+    })
+    setBusy(false)
+    if (error) return setError(errorText(error))
+    onChange()
   }
 
   async function toggleLinks() {
@@ -157,6 +187,16 @@ function Member({ member, members, self, isAdmin, onChange, onAssign, onEditIcon
           <input type="checkbox" checked={!member.hide_buy_links} disabled={busy} onChange={toggleLinks} />
           Show buy links
         </label>
+      )}
+      {isAdmin && !self && (
+        <div className="inline spread">
+          {!member.is_kid && (
+            <button className="link" disabled={busy} onClick={toggleRole}>
+              {member.role === 'admin' ? 'Make member' : 'Make admin'}
+            </button>
+          )}
+          <button className="link danger" onClick={onRemove}>Remove</button>
+        </div>
       )}
       {error && <p className="error">{error}</p>}
     </li>
